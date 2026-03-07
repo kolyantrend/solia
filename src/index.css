@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * Solana-style Theme System
+ * Override Tailwind's zinc palette based on data-theme attribute.
+ * Dark = deep purple Solana tones. Light = white/lavender.
+ */
+
+:root,
+[data-theme="dark"] {
+  --color-zinc-950: #0c0a1d;
+  --color-zinc-900: #14102e;
+  --color-zinc-800: #211a45;
+  --color-zinc-700: #312660;
+  --color-zinc-600: #4a3d7a;
+  --color-zinc-500: #6e60a0;
+  --color-zinc-400: #9488b8;
+  --color-zinc-300: #b8aed0;
+  --color-zinc-200: #d6cfe5;
+  --color-zinc-100: #ebe8f3;
+  --color-zinc-50: #f6f4fa;
+}
+
+[data-theme="light"] {
+  --color-zinc-950: #f6f4fa;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #e8e4f0;
+  --color-zinc-700: #d6d0e4;
+  --color-zinc-600: #b0a6c5;
+  --color-zinc-500: #8a80a5;
+  --color-zinc-400: #5c5478;
+  --color-zinc-300: #3a3258;
+  --color-zinc-200: #241c42;
+  --color-zinc-100: #1a1232;
+  --color-zinc-50: #0f0a22;
+}
+
+/* Ticker scroll animation */
+@keyframes scroll-x {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll-x {
+  animation: scroll-x 60s linear infinite;
+}
+
+.animate-scroll-x:hover {
+  animation-play-state: paused;
+}
+
+@keyframes scroll-x-reverse {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-scroll-x-reverse {
+  animation: scroll-x-reverse 45s linear infinite;
+}
+
+.animate-scroll-x-reverse:hover {
+  animation-play-state: paused;
+}
+
+/* Hide scrollbar utility */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Image protection — prevent saving/dragging */
+.protected-image {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  pointer-events: none;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.protected-image-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+.protected-image-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: transparent;
+}
