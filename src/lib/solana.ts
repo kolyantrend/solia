@@ -173,13 +173,17 @@ export async function transferSkrSplit({
   // Don't set blockhash here — wallet adapter sets it fresh at sign time
   const signature = await sendTransaction(tx, connection);
 
-  // Confirm with a fresh blockhash (the wallet may have used a different one)
+  // Confirm with timeout to prevent infinite retry loops
   try {
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-    await connection.confirmTransaction(
+    const confirmPromise = connection.confirmTransaction(
       { signature, blockhash, lastValidBlockHeight },
       'confirmed',
     );
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Confirmation timeout')), 30000)
+    );
+    await Promise.race([confirmPromise, timeoutPromise]);
   } catch (confirmErr: any) {
     // If confirmation times out, check if the tx actually succeeded
     const status = await connection.getSignatureStatus(signature);

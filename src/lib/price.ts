@@ -29,25 +29,7 @@ export async function getSkrPriceUsd(): Promise<number> {
     return cachedPrice ?? 0.02305;
   }
 
-  // Try Jupiter first (5s timeout)
-  try {
-    const c1 = new AbortController();
-    const t1 = setTimeout(() => c1.abort(), 5000);
-    const res = await fetch(`https://api.jup.ag/price/v2?ids=${SKR_MINT}`, { signal: c1.signal });
-    clearTimeout(t1);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const price = parseFloat(json.data?.[SKR_MINT]?.price);
-    if (!price || isNaN(price) || price <= 0) throw new Error('Invalid price');
-    cachedPrice = price;
-    cachedAt = now;
-    errorAt = 0;
-    return price;
-  } catch {
-    // Jupiter failed, try DexScreener
-  }
-
-  // Backup: DexScreener (5s timeout)
+  // Skip Jupiter (401 errors), use DexScreener directly (5s timeout)
   try {
     const c2 = new AbortController();
     const t2 = setTimeout(() => c2.abort(), 5000);

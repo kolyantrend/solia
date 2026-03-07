@@ -191,9 +191,9 @@ export const FeedView: FC<{ posts: Post[]; onViewProfile?: (address: string) => 
       </div>
 
       {/* Crypto Ticker */}
-      <div className="px-4 pt-3">
+      {/* <div className="px-4 pt-3">
         <CryptoTicker />
-      </div>
+      </div> */}
 
       {/* Top Creators Ticker */}
       <div className="px-4 pt-2">
