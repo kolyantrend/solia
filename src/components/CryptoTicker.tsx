@@ -11,19 +11,25 @@ interface CoinData {
   price_change_percentage_24h: number;
 }
 
+// Binance symbols to track (symbol -> display name)
+const TRACKED_COINS: { symbol: string; name: string; binance: string }[] = [
+  { symbol: 'btc', name: 'Bitcoin', binance: 'BTCUSDT' },
+  { symbol: 'eth', name: 'Ethereum', binance: 'ETHUSDT' },
+  { symbol: 'sol', name: 'Solana', binance: 'SOLUSDT' },
+  { symbol: 'bnb', name: 'BNB', binance: 'BNBUSDT' },
+  { symbol: 'xrp', name: 'XRP', binance: 'XRPUSDT' },
+  { symbol: 'ada', name: 'Cardano', binance: 'ADAUSDT' },
+  { symbol: 'doge', name: 'Dogecoin', binance: 'DOGEUSDT' },
+  { symbol: 'avax', name: 'Avalanche', binance: 'AVAXUSDT' },
+  { symbol: 'dot', name: 'Polkadot', binance: 'DOTUSDT' },
+  { symbol: 'matic', name: 'Polygon', binance: 'MATICUSDT' },
+];
+
 export const CryptoTicker: FC = () => {
-  const FALLBACK: CoinData[] = [
-    { id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', image: '', current_price: 97500, price_change_percentage_24h: 2.1 },
-    { id: 'ethereum', symbol: 'eth', name: 'Ethereum', image: '', current_price: 3450, price_change_percentage_24h: -0.5 },
-    { id: 'tether', symbol: 'usdt', name: 'Tether', image: '', current_price: 1.0, price_change_percentage_24h: 0.01 },
-    { id: 'solana', symbol: 'sol', name: 'Solana', image: '', current_price: 195, price_change_percentage_24h: 3.4 },
-    { id: 'binancecoin', symbol: 'bnb', name: 'BNB', image: '', current_price: 650, price_change_percentage_24h: 1.2 },
-    { id: 'ripple', symbol: 'xrp', name: 'XRP', image: '', current_price: 2.35, price_change_percentage_24h: -1.1 },
-    { id: 'usd-coin', symbol: 'usdc', name: 'USDC', image: '', current_price: 1.0, price_change_percentage_24h: 0.0 },
-    { id: 'cardano', symbol: 'ada', name: 'Cardano', image: '', current_price: 0.98, price_change_percentage_24h: 4.2 },
-    { id: 'dogecoin', symbol: 'doge', name: 'Dogecoin', image: '', current_price: 0.32, price_change_percentage_24h: -2.3 },
-    { id: 'avalanche-2', symbol: 'avax', name: 'Avalanche', image: '', current_price: 38.5, price_change_percentage_24h: 1.8 },
-  ];
+  const FALLBACK: CoinData[] = TRACKED_COINS.map((c) => ({
+    id: c.symbol, symbol: c.symbol, name: c.name, image: '',
+    current_price: 0, price_change_percentage_24h: 0,
+  }));
 
   // Show cached or fallback data immediately — never block render
   const getInitialCoins = (): CoinData[] => {
@@ -41,7 +47,7 @@ export const CryptoTicker: FC = () => {
 
   useEffect(() => {
     const CACHE_KEY = 'solia_crypto_cache';
-    const RETRY_BACKOFF = 15 * 60_000;
+    const RETRY_BACKOFF = 5 * 60_000;
     let failedAt = 0;
 
     const fetchPrices = async () => {
@@ -49,13 +55,22 @@ export const CryptoTicker: FC = () => {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
+        const symbols = TRACKED_COINS.map((c) => `"${c.binance}"`).join(',');
         const res = await fetch(
-          'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false&price_change_percentage=24h',
+          `https://api.binance.com/api/v3/ticker/24hr?symbols=[${symbols}]`,
           { signal: controller.signal }
         );
         clearTimeout(timeout);
         if (!res.ok) throw new Error(`API ${res.status}`);
-        const data: CoinData[] = await res.json();
+        const tickers: { symbol: string; lastPrice: string; priceChangePercent: string }[] = await res.json();
+        const data: CoinData[] = TRACKED_COINS.map((c) => {
+          const t = tickers.find((tk) => tk.symbol === c.binance);
+          return {
+            id: c.symbol, symbol: c.symbol, name: c.name, image: '',
+            current_price: t ? parseFloat(t.lastPrice) : 0,
+            price_change_percentage_24h: t ? parseFloat(t.priceChangePercent) : 0,
+          };
+        });
         setCoins(data);
         sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
         failedAt = 0;
@@ -65,7 +80,7 @@ export const CryptoTicker: FC = () => {
     };
 
     fetchPrices();
-    const interval = setInterval(fetchPrices, 5 * 60_000);
+    const interval = setInterval(fetchPrices, 60_000);
     return () => clearInterval(interval);
   }, []);
 

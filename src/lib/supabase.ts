@@ -16,7 +16,8 @@ export const supabase = createClient(
     global: {
       fetch: (url, options = {}) => {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        const isStorage = typeof url === 'string' && url.includes('/storage/');
+        const timeout = setTimeout(() => controller.abort(), isStorage ? 30000 : 8000);
         return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
       },
     },

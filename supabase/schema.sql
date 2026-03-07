@@ -239,5 +239,20 @@ create index if not exists idx_transactions_creator on transactions(creator_wall
 create index if not exists idx_transactions_referrer on transactions(referrer_wallet);
 create index if not exists idx_transactions_created_at on transactions(created_at desc);
 
--- 12. Storage bucket for images (run separately in Storage settings)
--- Go to Supabase Dashboard → Storage → New Bucket → name: "images" → Public: ON
+-- 12. Storage policies for images bucket
+-- Run this AFTER creating the bucket "images" (Public: ON) in Storage settings
+-- First delete any existing policies that might conflict:
+drop policy if exists "Public read access" on storage.objects;
+drop policy if exists "Allow authenticated uploads" on storage.objects;
+drop policy if exists "Give anon users access to JPG images in folder" on storage.objects;
+drop policy if exists "Allow uploads" on storage.objects;
+
+-- Allow everyone to read files from images bucket
+create policy "Public read images"
+  on storage.objects for select
+  using (bucket_id = 'images');
+
+-- Allow everyone to upload files to images bucket (app uses anon key)
+create policy "Public upload images"
+  on storage.objects for insert
+  with check (bucket_id = 'images');
