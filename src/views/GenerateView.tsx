@@ -28,7 +28,7 @@ interface ImageFileData {
 
 export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenerate }) => {
   const { t } = useI18n();
-  const { publicKey, connected, sendTransaction } = useWallet();
+  const { publicKey, connected, signTransaction } = useWallet();
   const [prompt, setPrompt] = useState('');
   const [category, setCategory] = useState('Main');
   const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -211,7 +211,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
         const sig = await transferSkrSplit({
           fromWallet: publicKey,
           recipients,
-          sendTransaction,
+          signTransaction: signTransaction!,
           connection,
         });
 

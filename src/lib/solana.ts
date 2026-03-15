@@ -83,8 +83,8 @@ export interface TransferSkrParams {
   toWallet: PublicKey;
   /** Amount in human-readable SKR (e.g. 17.4) */
   amount: number;
-  /** wallet.sendTransaction function from @solana/wallet-adapter-react */
-  sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
+  /** wallet.signTransaction from @solana/wallet-adapter-react */
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
   /** Optional connection from useConnection(); falls back to default RPC */
   connection?: Connection;
 }
@@ -98,13 +98,13 @@ export async function transferSkr({
   fromWallet,
   toWallet,
   amount,
-  sendTransaction,
+  signTransaction,
   connection: externalConnection,
 }: TransferSkrParams): Promise<string> {
   return transferSkrSplit({
     fromWallet,
     recipients: [{ wallet: toWallet, amount }],
-    sendTransaction,
+    signTransaction,
     connection: externalConnection,
   });
 }
@@ -118,7 +118,7 @@ export interface SplitRecipient {
 export interface TransferSkrSplitParams {
   fromWallet: PublicKey;
   recipients: SplitRecipient[];
-  sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
   connection?: Connection;
 }
 
@@ -130,7 +130,7 @@ export interface TransferSkrSplitParams {
 export async function transferSkrSplit({
   fromWallet,
   recipients,
-  sendTransaction,
+  signTransaction,
   connection: externalConnection,
 }: TransferSkrSplitParams): Promise<string> {
   const connection = externalConnection || getConnection();
@@ -170,11 +170,13 @@ export async function transferSkrSplit({
 
   tx.feePayer = fromWallet;
 
-  // Explicitly set blockhash — mobile wallets (Phantom in-app) don't auto-set it
+  // Explicitly set blockhash — required for mobile wallets (Phantom in-app)
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
   tx.recentBlockhash = blockhash;
 
-  const signature = await sendTransaction(tx, connection);
+  // Sign manually then send raw — mobile Phantom doesn't work with sendTransaction
+  const signed = await signTransaction(tx);
+  const signature = await connection.sendRawTransaction(signed.serialize());
 
   // Confirm with timeout to prevent infinite retry loops
   try {
