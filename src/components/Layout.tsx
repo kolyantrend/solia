@@ -21,29 +21,33 @@ const isMobileWebNoWallet = () => {
 const PHANTOM_ICON = '/Phantom.jpg';
 const SOLFLARE_ICON = '/Solflare.jpg';
 
-/** Generate Phantom browse deep link — custom scheme for non-Chrome WebViews (Telegram etc.), universal link for Chrome/iOS */
+/** Generate Phantom browse deep link.
+ *  Chrome: universal link (Chrome handles it natively → opens Phantom).
+ *  Non-Chrome Android (Telegram etc.): intent to open Chrome with the universal link → Chrome → Phantom. */
 const getPhantomBrowseUrl = (targetUrl: string) => {
-  const encoded = encodeURIComponent(targetUrl);
+  const universalLink = `https://phantom.app/ul/browse/${encodeURIComponent(targetUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
   const ua = navigator.userAgent;
   const isAndroid = /Android/i.test(ua);
   const isStandardChrome = /Chrome/i.test(ua) && !/Telegram|OPR|Edge|SamsungBrowser/i.test(ua);
-  // Non-Chrome Android WebViews (Telegram, etc.) can't handle universal links — use custom scheme
+  // From non-Chrome Android WebViews, open Chrome first — Chrome handles the universal link
   if (isAndroid && !isStandardChrome) {
-    return `phantom://browse/${encoded}`;
+    const url = new URL(universalLink);
+    return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=https;package=com.android.chrome;end`;
   }
-  return `https://phantom.app/ul/browse/${encoded}?ref=${encodeURIComponent(window.location.origin)}`;
+  return universalLink;
 };
 
 /** Generate Solflare browse deep link */
 const getSolflareBrowseUrl = (targetUrl: string) => {
-  const encoded = encodeURIComponent(targetUrl);
+  const universalLink = `https://solflare.com/ul/v1/browse/${encodeURIComponent(targetUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
   const ua = navigator.userAgent;
   const isAndroid = /Android/i.test(ua);
   const isStandardChrome = /Chrome/i.test(ua) && !/Telegram|OPR|Edge|SamsungBrowser/i.test(ua);
   if (isAndroid && !isStandardChrome) {
-    return `solflare://ul/v1/browse/${encoded}`;
+    const url = new URL(universalLink);
+    return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=https;package=com.android.chrome;end`;
   }
-  return `https://solflare.com/ul/v1/browse/${encoded}?ref=${encodeURIComponent(window.location.origin)}`;
+  return universalLink;
 };
 
 interface LayoutProps {
