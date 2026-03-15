@@ -10,20 +10,20 @@ import { getProfile } from '../lib/database';
 import { getTwitterAvatarUrl } from '../lib/utils';
 import { SolanaAvatar } from './SolanaAvatar';
 
-/** True when on mobile/in-app browser WITHOUT an injected wallet.
- *  Shows deep link modal (Phantom/Solflare browse links) instead of WalletMultiButton.
- *  MWA does NOT work from Chrome (WebSocket drops on app switch).
- *  Returns false inside wallet in-app browsers (wallet auto-detected) and on Seeker. */
+/** True ONLY for Telegram browser or iOS without injected wallet.
+ *  These platforms can't use MWA → show browse links modal.
+ *  Android Chrome uses WalletMultiButton + MWA (like jup.ag). */
 const isMobileWebNoWallet = () => {
   if (typeof window === 'undefined') return false;
   const ua = navigator.userAgent;
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
-  const isTelegram = /Telegram/i.test(ua) || !!(window as any).TelegramWebviewProxy;
   const hasWallet = 'solana' in window || 'phantom' in window || 'solflare' in window;
   if (hasWallet) return false;
-  const isSolanaMobile = typeof (window as any).__solanaMobile !== 'undefined';
-  if (isSolanaMobile) return false;
-  return isMobile || isTelegram;
+  const isTelegram = /Telegram/i.test(ua) || !!(window as any).TelegramWebviewProxy;
+  if (isTelegram) return true;
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  if (isIOS) return true;
+  // Android Chrome → MWA handles connection via WalletMultiButton
+  return false;
 };
 
 const PHANTOM_ICON = '/Phantom.jpg';
@@ -118,14 +118,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
             )}
           </div>
           <div className="scale-[0.75] sm:scale-90 origin-right">
-            {phantomDeeplink.connected ? (
-              <button
-                onClick={phantomDeeplink.disconnect}
-                className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 h-7 sm:h-8 px-2 sm:px-3 rounded-xl text-[10px] sm:text-xs font-medium text-zinc-300 transition-colors whitespace-nowrap"
-              >
-                <Wallet size={12} /> {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
-              </button>
-            ) : isMobileWebNoWallet() && !publicKey ? (
+            {isMobileWebNoWallet() && !publicKey ? (
               <button
                 onClick={() => setShowMobileWallet(true)}
                 className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 h-7 sm:h-8 px-2 sm:px-3 rounded-xl text-[10px] sm:text-xs font-medium text-zinc-300 transition-colors whitespace-nowrap"
@@ -201,47 +194,36 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
               </button>
             </div>
 
-            <p className="text-sm text-zinc-400 mb-3">
-              Connect your wallet:
+            <p className="text-sm text-zinc-400 mb-4">
+              Open Solia inside your wallet app to connect:
             </p>
             <div className="flex flex-col gap-3">
-              {/* Phantom deeplink connect: Chrome→Phantom→approve→Chrome */}
-              <button
-                onClick={() => { setShowMobileWallet(false); phantomDeeplink.connect(); }}
-                className="flex items-center gap-3 p-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition-colors text-left"
+              <a
+                href={getPhantomBrowseUrl(window.location.href)}
+                className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
               >
                 <img src={PHANTOM_ICON} alt="" className="w-10 h-10 rounded-xl" />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-white">Phantom</div>
-                  <div className="text-xs text-indigo-200">Connect & stay in Chrome</div>
-                </div>
-                <span className="text-indigo-200 text-lg">›</span>
-              </button>
-
-              <div className="border-t border-zinc-800 pt-3 mt-1">
-                <p className="text-xs text-zinc-500 mb-2">Or open inside wallet browser:</p>
-              </div>
-              <a
-                href={getPhantomBrowseUrl(window.location.href)}
-                className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
-              >
-                <img src={PHANTOM_ICON} alt="" className="w-8 h-8 rounded-lg" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-zinc-200">Phantom Browser</div>
+                  <div className="text-sm font-semibold text-zinc-100">Phantom</div>
+                  <div className="text-xs text-zinc-400">Open in Phantom Browser</div>
                 </div>
                 <span className="text-zinc-500 text-lg">›</span>
               </a>
               <a
                 href={getSolflareBrowseUrl(window.location.href)}
-                className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
+                className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
               >
-                <img src={SOLFLARE_ICON} alt="" className="w-8 h-8 rounded-lg" />
+                <img src={SOLFLARE_ICON} alt="" className="w-10 h-10 rounded-xl" />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-zinc-200">Solflare Browser</div>
+                  <div className="text-sm font-semibold text-zinc-100">Solflare</div>
+                  <div className="text-xs text-zinc-400">Open in Solflare Browser</div>
                 </div>
                 <span className="text-zinc-500 text-lg">›</span>
               </a>
             </div>
+            <p className="text-xs text-zinc-500 mt-4 text-center">
+              The site will open inside the wallet app where connection is automatic
+            </p>
           </div>
         </div>
       )}

@@ -35,11 +35,10 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
 
             const adapters: any[] = [window._solflareAdapter];
 
-            // MWA only for Seeker / Solana Mobile dApp Store (NOT mobile web browsers).
-            // On mobile Chrome, MWA WebSocket drops when switching to Phantom app → instant bounce-back.
-            // Phantom/Solflare auto-register via Wallet Standard in their in-app browsers.
-            const isSolanaMobile = typeof (window as any).__solanaMobile !== 'undefined';
-            if (isSolanaMobile) {
+            // MWA for all Android — gives system wallet chooser (Phantom / Solana Mobile Wallet)
+            // Same approach as jup.ag: WalletMultiButton + MWA on Android Chrome.
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            if (isAndroid) {
                 adapters.unshift(
                     new SolanaMobileWalletAdapter({
                         addressSelector: createDefaultAddressSelector(),
