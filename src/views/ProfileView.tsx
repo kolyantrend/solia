@@ -232,10 +232,27 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     // Use original URL if available (for owners), otherwise use public URL
     const downloadUrl = work.originalUrl || work.imageUrl;
 
-    // In-app browsers (Phantom, Solflare, Telegram) block ALL download methods
-    // Copy image link to clipboard — user can paste in Chrome to save
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
+      // Strategy 1: Share URL via system share sheet (Chrome, Telegram, etc.)
+      // User picks Chrome → image opens → can save from there
+      if (navigator.share) {
+        try {
+          // Try sharing as file first (works on some devices)
+          const res = await fetch(downloadUrl);
+          const blob = await res.blob();
+          const file = new File([blob], fileName, { type: blob.type || 'image/webp' });
+          if (navigator.canShare?.({ files: [file] })) {
+            await navigator.share({ files: [file], title: 'Solia AI Art' });
+            return;
+          }
+        } catch { /* file share failed, try URL share */ }
+        try {
+          await navigator.share({ url: downloadUrl, title: 'Solia AI Art — Save Image' });
+          return;
+        } catch { /* user cancelled or share failed */ }
+      }
+      // Strategy 2: Copy link to clipboard as last resort
       try {
         await navigator.clipboard.writeText(downloadUrl);
         setDownloadCopied(true);
