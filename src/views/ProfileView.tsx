@@ -187,15 +187,22 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     }
   };
 
-  const handleDownload = (url: string, prompt: string) => {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `solia_${prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownload = async (url: string, prompt: string) => {
+    const fileName = `solia_${prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, '_blank');
+    }
   };
 
 

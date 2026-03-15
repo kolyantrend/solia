@@ -502,23 +502,23 @@ const PostCard: FC<{
 
   return (
     <div className="bg-zinc-900/50 rounded-3xl overflow-hidden border border-zinc-800/50 shadow-xl backdrop-blur-sm">
-      <div className="p-4 flex items-center justify-between">
+      <div className="p-3 sm:p-4 flex items-center justify-between gap-2">
         <button
           onClick={() => onViewProfile?.(post.author)}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
         >
           {authorAvatar ? (
-            <img src={authorAvatar} alt="" className="w-8 h-8 rounded-full object-cover border border-zinc-700" referrerPolicy="no-referrer" />
+            <img src={authorAvatar} alt="" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-zinc-700 shrink-0" referrerPolicy="no-referrer" />
           ) : (
-            <SolanaAvatar size={32} />
+            <SolanaAvatar size={28} />
           )}
-          <div className="flex items-center gap-1">
-            <span className="text-sm text-zinc-300">{getProfileDisplayName(profile, post.author)}</span>
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-xs sm:text-sm text-zinc-300 truncate max-w-[120px] sm:max-w-[180px]">{getProfileDisplayName(profile, post.author)}</span>
             {authorVerified && <BadgeCheck size={14} className="text-blue-400 shrink-0" />}
           </div>
         </button>
         {post.category && (
-          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-zinc-800 text-zinc-300">
+          <span className="text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-zinc-800 text-zinc-300 shrink-0 whitespace-nowrap">
             {post.category}
           </span>
         )}
@@ -539,32 +539,32 @@ const PostCard: FC<{
         />
       </div>
 
-      <div className="p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={handleLike} className={`flex items-center gap-1.5 transition-colors ${liked ? 'text-pink-500' : 'text-zinc-400 hover:text-zinc-200'}`}>
-              <Heart size={22} className={liked ? 'fill-current' : ''} />
-              <span className="font-medium text-sm">{likes}</span>
+      <div className="p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button onClick={handleLike} className={`flex items-center gap-1 sm:gap-1.5 transition-colors ${liked ? 'text-pink-500' : 'text-zinc-400 hover:text-zinc-200'}`}>
+              <Heart size={20} className={`sm:w-[22px] sm:h-[22px] ${liked ? 'fill-current' : ''}`} />
+              <span className="font-medium text-xs sm:text-sm">{likes}</span>
             </button>
-            <button onClick={handleToggleComments} className={`flex items-center gap-1.5 transition-colors ${showComments ? 'text-indigo-400' : 'text-zinc-400 hover:text-zinc-200'}`}>
-              <MessageCircle size={22} />
-              <span className="font-medium text-sm">{commentCount || t('feed.reply')}</span>
+            <button onClick={handleToggleComments} className={`flex items-center gap-1 sm:gap-1.5 transition-colors ${showComments ? 'text-indigo-400' : 'text-zinc-400 hover:text-zinc-200'}`}>
+              <MessageCircle size={20} className="sm:w-[22px] sm:h-[22px]" />
+              <span className="font-medium text-xs sm:text-sm">{commentCount || t('feed.reply')}</span>
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {wallet && wallet !== post.author && !purchased ? (
               <button
                 onClick={() => setShowBuyModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-medium hover:bg-emerald-500/25 transition-colors"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] sm:text-xs font-medium hover:bg-emerald-500/25 transition-colors whitespace-nowrap"
               >
-                <ShoppingCart size={14} />
+                <ShoppingCart size={12} className="sm:w-[14px] sm:h-[14px]" />
                 Buy {buyCostSkr} SKR
               </button>
             ) : purchased ? (
-              <span className="text-xs text-emerald-400 font-medium">{t('buy.purchased')}</span>
+              <span className="text-[10px] sm:text-xs text-emerald-400 font-medium">{t('buy.purchased')}</span>
             ) : null}
             <button onClick={handleShare} className="text-zinc-400 hover:text-indigo-400 transition-colors">
-              <Share2 size={22} />
+              <Share2 size={20} className="sm:w-[22px] sm:h-[22px]" />
             </button>
           </div>
         </div>
