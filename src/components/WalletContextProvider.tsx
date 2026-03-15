@@ -25,31 +25,33 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
 
     const wallets = useMemo(
         () => {
-            if (typeof window !== 'undefined') {
-                if (!window._solflareAdapter) {
-                    window._solflareAdapter = new SolflareWalletAdapter();
-                }
-                return [
+            if (typeof window === 'undefined') {
+                return [new SolflareWalletAdapter()];
+            }
+
+            if (!window._solflareAdapter) {
+                window._solflareAdapter = new SolflareWalletAdapter();
+            }
+
+            const adapters: any[] = [window._solflareAdapter];
+
+            // MWA only for native Solana Mobile dApp Store (not mobile web browsers)
+            // On mobile web, MWA causes redirect-back issues (WebSocket fails)
+            // Phantom/Solflare auto-register via Wallet Standard in their in-app browsers
+            const isNativeMobile = typeof (window as any).__solanaMobile !== 'undefined';
+            if (isNativeMobile) {
+                adapters.unshift(
                     new SolanaMobileWalletAdapter({
                         addressSelector: createDefaultAddressSelector(),
                         appIdentity: { name: 'Solia', icon: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Logo%20New.png', uri: 'https://solia.live' },
                         authorizationResultCache: createDefaultAuthorizationResultCache(),
                         cluster: 'mainnet-beta',
                         onWalletNotFound: createDefaultWalletNotFoundHandler(),
-                    }),
-                    window._solflareAdapter,
-                ];
+                    })
+                );
             }
-            return [
-                new SolanaMobileWalletAdapter({
-                    addressSelector: createDefaultAddressSelector(),
-                    appIdentity: { name: 'Solia', icon: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Logo%20New.png', uri: 'https://solia.live' },
-                    authorizationResultCache: createDefaultAuthorizationResultCache(),
-                    cluster: 'mainnet-beta',
-                    onWalletNotFound: createDefaultWalletNotFoundHandler(),
-                }),
-                new SolflareWalletAdapter(),
-            ];
+
+            return adapters;
         },
         []
     );
