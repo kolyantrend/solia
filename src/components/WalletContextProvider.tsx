@@ -55,9 +55,18 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
         []
     );
 
+    // Disable autoConnect on Android Chrome — prevents MWA bounce-back loop.
+    // When MWA redirects to Phantom and back, autoConnect re-triggers MWA → infinite loop.
+    // jup.ag also uses autoConnect: false. Desktop & in-app browsers still auto-connect.
+    const isAndroidChrome = useMemo(() => {
+        if (typeof window === 'undefined') return false;
+        const ua = navigator.userAgent;
+        return /Android/i.test(ua) && !('solana' in window) && !('phantom' in window);
+    }, []);
+
     return (
         <ConnectionProvider endpoint={endpoint}>
-            <WalletProvider wallets={wallets} autoConnect>
+            <WalletProvider wallets={wallets} autoConnect={!isAndroidChrome}>
                 <WalletModalProvider>{children}</WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>

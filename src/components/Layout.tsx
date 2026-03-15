@@ -1,9 +1,7 @@
 import { FC, ReactNode, useState, useEffect } from 'react';
 import { Home, ImagePlus, Trophy, User, Globe, Sun, Moon, Twitter, BarChart3, Wallet, X } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
-import { usePhantomDeeplink } from '../contexts/PhantomDeeplinkContext';
 import { useI18n, LANG_LABELS, Lang } from '../i18n';
 import { useTheme } from '../theme';
 import { getProfile } from '../lib/database';
@@ -45,7 +43,6 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
   const { t, lang, setLang } = useI18n();
   const { theme, toggle } = useTheme();
   const { publicKey } = useUnifiedWallet();
-  const phantomDeeplink = usePhantomDeeplink();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [showMobileWallet, setShowMobileWallet] = useState(false);
