@@ -233,32 +233,18 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
 
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
-      // Strategy 1: Share URL immediately (preserves user gesture — no async before share)
+      // Always copy link first — guaranteed to work, gives instant feedback
+      try { await navigator.clipboard.writeText(downloadUrl); } catch {}
+      setDownloadCopied(true);
+      setTimeout(() => setDownloadCopied(false), 3000);
+
+      // Then try share as bonus (with timeout — Phantom hangs on share silently)
       if (navigator.share) {
         try {
-          await navigator.share({ url: downloadUrl, title: 'Save Solia Image', text: 'Open in browser to save' });
-          return;
-        } catch (e: any) {
-          // AbortError = user cancelled share sheet, that's fine
-          if (e?.name === 'AbortError') return;
-        }
-      }
-      // Strategy 2: Open in Chrome via Android intent (works from any WebView)
-      if (/Android/i.test(navigator.userAgent)) {
-        try {
-          const url = new URL(downloadUrl);
-          const intentUrl = `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=https;package=com.android.chrome;end`;
-          window.location.href = intentUrl;
-          return;
-        } catch { /* intent failed */ }
-      }
-      // Strategy 3: Copy link to clipboard
-      try {
-        await navigator.clipboard.writeText(downloadUrl);
-        setDownloadCopied(true);
-        setTimeout(() => setDownloadCopied(false), 2500);
-      } catch {
-        window.open(downloadUrl, '_blank');
+          const sharePromise = navigator.share({ url: downloadUrl, title: 'Save Solia Image' });
+          const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000));
+          await Promise.race([sharePromise, timeout]);
+        } catch { /* share failed or timed out — link already copied */ }
       }
       return;
     }

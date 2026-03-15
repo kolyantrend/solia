@@ -21,14 +21,15 @@ const isMobileWebNoWallet = () => {
 const PHANTOM_ICON = '/Phantom.jpg';
 const SOLFLARE_ICON = '/Solflare.jpg';
 
-/** Generate Phantom browse deep link — intent:// for Android WebViews (Telegram etc.), universal link for Chrome/iOS */
+/** Generate Phantom browse deep link — custom scheme for non-Chrome WebViews (Telegram etc.), universal link for Chrome/iOS */
 const getPhantomBrowseUrl = (targetUrl: string) => {
   const encoded = encodeURIComponent(targetUrl);
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const isChrome = /Chrome/i.test(navigator.userAgent) && !/Telegram|OPR|Edge/i.test(navigator.userAgent);
-  // Chrome handles universal links natively; other Android WebViews need intent://
-  if (isAndroid && !isChrome) {
-    return `intent://browse/${encoded}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent('https://phantom.app')};end`;
+  const ua = navigator.userAgent;
+  const isAndroid = /Android/i.test(ua);
+  const isStandardChrome = /Chrome/i.test(ua) && !/Telegram|OPR|Edge|SamsungBrowser/i.test(ua);
+  // Non-Chrome Android WebViews (Telegram, etc.) can't handle universal links — use custom scheme
+  if (isAndroid && !isStandardChrome) {
+    return `phantom://browse/${encoded}`;
   }
   return `https://phantom.app/ul/browse/${encoded}?ref=${encodeURIComponent(window.location.origin)}`;
 };
@@ -36,10 +37,11 @@ const getPhantomBrowseUrl = (targetUrl: string) => {
 /** Generate Solflare browse deep link */
 const getSolflareBrowseUrl = (targetUrl: string) => {
   const encoded = encodeURIComponent(targetUrl);
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const isChrome = /Chrome/i.test(navigator.userAgent) && !/Telegram|OPR|Edge/i.test(navigator.userAgent);
-  if (isAndroid && !isChrome) {
-    return `intent://ul/v1/browse/${encoded}#Intent;scheme=https;package=com.solflare.mobile;S.browser_fallback_url=${encodeURIComponent('https://solflare.com')};end`;
+  const ua = navigator.userAgent;
+  const isAndroid = /Android/i.test(ua);
+  const isStandardChrome = /Chrome/i.test(ua) && !/Telegram|OPR|Edge|SamsungBrowser/i.test(ua);
+  if (isAndroid && !isStandardChrome) {
+    return `solflare://ul/v1/browse/${encoded}`;
   }
   return `https://solflare.com/ul/v1/browse/${encoded}?ref=${encodeURIComponent(window.location.origin)}`;
 };
