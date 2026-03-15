@@ -31,25 +31,24 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
                 if (!window._solflareAdapter) window._solflareAdapter = new SolflareWalletAdapter();
                 if (!window._phantomAdapter) window._phantomAdapter = new PhantomWalletAdapter();
                 
-                // On mobile, if wallet is already injected (in-app browser), use it
-                const hasWallet = 'solana' in window || 'phantom' in window;
+                const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                const walletList: any[] = [window._phantomAdapter, window._solflareAdapter];
                 
-                if (hasWallet) {
-                    return [window._phantomAdapter, window._solflareAdapter];
+                // Only add MWA for native Android apps (Saga phone / Solana Mobile dApp Store)
+                // Skip on mobile web browsers — Phantom/Solflare handle deep linking natively
+                if (isMobile && typeof (window as any).__solanaMobile !== 'undefined') {
+                    walletList.unshift(
+                        new SolanaMobileWalletAdapter({
+                            addressSelector: createDefaultAddressSelector(),
+                            appIdentity: { name: 'Solia', icon: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Logo%20New.png', uri: 'https://solia.live' },
+                            authorizationResultCache: createDefaultAuthorizationResultCache(),
+                            cluster: 'mainnet-beta',
+                            onWalletNotFound: createDefaultWalletNotFoundHandler(),
+                        })
+                    );
                 }
                 
-                // Desktop: Phantom/Solflare browser extensions auto-register
-                return [
-                    new SolanaMobileWalletAdapter({
-                        addressSelector: createDefaultAddressSelector(),
-                        appIdentity: { name: 'Solia', icon: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Logo%20New.png', uri: 'https://solia.live' },
-                        authorizationResultCache: createDefaultAuthorizationResultCache(),
-                        cluster: 'mainnet-beta',
-                        onWalletNotFound: createDefaultWalletNotFoundHandler(),
-                    }),
-                    window._phantomAdapter,
-                    window._solflareAdapter,
-                ];
+                return walletList;
             }
             return [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
         },
