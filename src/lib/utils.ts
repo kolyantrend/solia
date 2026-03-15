@@ -196,7 +196,7 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       // Add semi-transparent watermark (larger, horizontal, more visible)
       const fontSize = Math.max(canvas.width, canvas.height) * 0.12;
       ctx.font = `900 ${fontSize}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
@@ -207,7 +207,7 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       ctx.save();
       const cornerFontSize = fontSize * 0.5;
       ctx.font = `900 ${cornerFontSize}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
       const padding = cornerFontSize * 0.3;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
