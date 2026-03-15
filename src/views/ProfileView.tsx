@@ -63,6 +63,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const [refCode, setRefCode] = useState<string | null>(null);
   const [viewingWork, setViewingWork] = useState<WorkItem | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [saveImageUrl, setSaveImageUrl] = useState<string | null>(null);
 
   // Verification
   const [verified, setVerified] = useState(false);
@@ -195,12 +196,11 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     // Use original URL if available (for owners), otherwise use public URL
     const downloadUrl = work.originalUrl || work.imageUrl;
 
-    // In-app browsers (Phantom, Solflare, Telegram) block file downloads
-    // Open image directly — user can long-press to save to gallery
+    // In-app browsers (Phantom, Solflare, Telegram) block file downloads & window.open
+    // Show fullscreen image overlay — user long-presses to save to gallery
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isInAppBrowser = 'phantom' in window || 'solflare' in window || /Telegram/i.test(navigator.userAgent);
-    if (isMobile || isInAppBrowser) {
-      window.open(downloadUrl, '_blank');
+    if (isMobile) {
+      setSaveImageUrl(downloadUrl);
       return;
     }
 
@@ -933,6 +933,28 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Fullscreen image save overlay — mobile only */}
+      {saveImageUrl && (
+        <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center" onClick={() => setSaveImageUrl(null)}>
+          <div className="absolute top-4 right-4 z-10">
+            <button onClick={() => setSaveImageUrl(null)} className="p-2 rounded-full bg-black/60 text-white">
+              <X size={24} />
+            </button>
+          </div>
+          <div className="px-4 pb-3 text-center">
+            <p className="text-zinc-300 text-sm font-medium bg-black/60 px-4 py-2 rounded-xl">
+              📲 Long press image to save
+            </p>
+          </div>
+          <img
+            src={saveImageUrl}
+            alt="Save this image"
+            className="max-w-full max-h-[80vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
