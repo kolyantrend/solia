@@ -194,20 +194,20 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     const fileName = `solia_${work.prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
     // Use original URL if available (for owners), otherwise use public URL
     const downloadUrl = work.originalUrl || work.imageUrl;
+
+    // In-app browsers (Phantom, Solflare, Telegram) block file downloads
+    // Open image directly — user can long-press to save to gallery
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isInAppBrowser = 'phantom' in window || 'solflare' in window || /Telegram/i.test(navigator.userAgent);
+    if (isMobile || isInAppBrowser) {
+      window.open(downloadUrl, '_blank');
+      return;
+    }
+
+    // Desktop: standard blob download
     try {
       const res = await fetch(downloadUrl);
       const blob = await res.blob();
-
-      // Try Web Share API first — works in Phantom/Solflare in-app browsers
-      if (navigator.share && navigator.canShare) {
-        const file = new File([blob], fileName, { type: blob.type || 'image/webp' });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'Solia AI Art' });
-          return;
-        }
-      }
-
-      // Fallback: standard download (desktop browsers)
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
