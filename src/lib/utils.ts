@@ -205,12 +205,16 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       
       // Add corner watermarks for better coverage
       ctx.save();
-      ctx.font = `900 ${fontSize * 0.6}px Arial`;
+      const cornerFontSize = fontSize * 0.5;
+      ctx.font = `900 ${cornerFontSize}px Arial`;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      const padding = cornerFontSize * 0.3;
       ctx.textAlign = 'left';
-      ctx.fillText('SOLIA', 20, 40);
+      ctx.textBaseline = 'top';
+      ctx.fillText('SOLIA', padding, padding);
       ctx.textAlign = 'right';
-      ctx.fillText('SOLIA', canvas.width - 20, canvas.height - 20);
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('SOLIA', canvas.width - padding, canvas.height - padding);
       ctx.restore();
       
       // Add diagonal pattern
