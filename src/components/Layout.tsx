@@ -8,13 +8,18 @@ import { getProfile } from '../lib/database';
 import { getTwitterAvatarUrl } from '../lib/utils';
 import { SolanaAvatar } from './SolanaAvatar';
 
-/** True when on mobile browser WITHOUT an injected wallet (regular Chrome/Safari) */
+/** True when on mobile/in-app browser WITHOUT an injected wallet (Chrome, Safari, Telegram, etc.) */
 const isMobileWebNoWallet = () => {
   if (typeof window === 'undefined') return false;
-  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const ua = navigator.userAgent;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+  const isTelegram = /Telegram/i.test(ua) || !!(window as any).TelegramWebviewProxy;
   const hasWallet = 'solana' in window || 'phantom' in window || 'solflare' in window;
-  return mobile && !hasWallet;
+  return (isMobile || isTelegram) && !hasWallet;
 };
+
+const PHANTOM_ICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="26" fill="%23AB9FF2"/><path d="M110.5 64.2c-1.3 0-2.4-1-2.4-2.4 0-21.7-17.6-39.2-39.2-39.2-21.2 0-38.5 16.8-39.2 37.8-.8 24.7 20.7 47.3 45.4 47.3h1.3c19.4 0 36.3-13.3 40.8-32.1.5-2.1-1-4.2-3.2-4.2h-3.5zm-62.4 4.8c0 2.7-2.2 4.8-4.8 4.8s-4.8-2.2-4.8-4.8v-9.7c0-2.7 2.2-4.8 4.8-4.8s4.8 2.2 4.8 4.8v9.7zm18.1 0c0 2.7-2.2 4.8-4.8 4.8s-4.8-2.2-4.8-4.8v-9.7c0-2.7 2.2-4.8 4.8-4.8s4.8 2.2 4.8 4.8v9.7z" fill="%23FFFDF8"/></svg>')}`;
+const SOLFLARE_ICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="26" fill="%23FC8620"/><path d="M98 54.8c0 18.8-15.2 34-34 34s-34-15.2-34-34c0-4.2.8-8.2 2.2-11.8L64 74.6l31.8-31.6c1.4 3.6 2.2 7.6 2.2 11.8z" fill="%23fff"/><circle cx="64" cy="44" r="12" fill="%23fff"/></svg>')}`;
 
 interface LayoutProps {
   children: ReactNode;
@@ -181,7 +186,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
                 href={`https://phantom.app/ul/browse/${encodeURIComponent(window.location.origin)}?ref=${encodeURIComponent(window.location.origin)}`}
                 className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
               >
-                <img src="https://phantom.app/img/phantom-icon-purple.svg" alt="" className="w-10 h-10 rounded-xl" />
+                <img src={PHANTOM_ICON} alt="" className="w-10 h-10 rounded-xl" />
                 <div className="flex-1">
                   <div className="text-sm font-semibold text-zinc-100">Phantom</div>
                   <div className="text-xs text-zinc-400">Open in Phantom Browser</div>
@@ -192,7 +197,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
                 href={`https://solflare.com/ul/v1/browse/${encodeURIComponent(window.location.origin)}?ref=${encodeURIComponent(window.location.origin)}`}
                 className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
               >
-                <img src="https://solflare.com/favicon.ico" alt="" className="w-10 h-10 rounded-xl" />
+                <img src={SOLFLARE_ICON} alt="" className="w-10 h-10 rounded-xl" />
                 <div className="flex-1">
                   <div className="text-sm font-semibold text-zinc-100">Solflare</div>
                   <div className="text-xs text-zinc-400">Open in Solflare Browser</div>

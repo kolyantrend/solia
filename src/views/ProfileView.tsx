@@ -197,6 +197,17 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     try {
       const res = await fetch(downloadUrl);
       const blob = await res.blob();
+
+      // Try Web Share API first — works in Phantom/Solflare in-app browsers
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], fileName, { type: blob.type || 'image/webp' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Solia AI Art' });
+          return;
+        }
+      }
+
+      // Fallback: standard download (desktop browsers)
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
