@@ -83,8 +83,8 @@ export interface TransferSkrParams {
   toWallet: PublicKey;
   /** Amount in human-readable SKR (e.g. 17.4) */
   amount: number;
-  /** wallet.signTransaction from @solana/wallet-adapter-react */
-  signTransaction: (tx: Transaction) => Promise<Transaction>;
+  /** wallet.sendTransaction from @solana/wallet-adapter-react */
+  sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
   /** Optional connection from useConnection(); falls back to default RPC */
   connection?: Connection;
 }
@@ -98,13 +98,13 @@ export async function transferSkr({
   fromWallet,
   toWallet,
   amount,
-  signTransaction,
+  sendTransaction,
   connection: externalConnection,
 }: TransferSkrParams): Promise<string> {
   return transferSkrSplit({
     fromWallet,
     recipients: [{ wallet: toWallet, amount }],
-    signTransaction,
+    sendTransaction,
     connection: externalConnection,
   });
 }
@@ -118,7 +118,7 @@ export interface SplitRecipient {
 export interface TransferSkrSplitParams {
   fromWallet: PublicKey;
   recipients: SplitRecipient[];
-  signTransaction: (tx: Transaction) => Promise<Transaction>;
+  sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
   connection?: Connection;
 }
 
@@ -130,7 +130,7 @@ export interface TransferSkrSplitParams {
 export async function transferSkrSplit({
   fromWallet,
   recipients,
-  signTransaction,
+  sendTransaction,
   connection: externalConnection,
 }: TransferSkrSplitParams): Promise<string> {
   const connection = externalConnection || getConnection();
@@ -170,13 +170,7 @@ export async function transferSkrSplit({
 
   tx.feePayer = fromWallet;
 
-  // Explicitly set blockhash — required for mobile wallets (Phantom in-app)
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-  tx.recentBlockhash = blockhash;
-
-  // Sign manually then send raw — mobile Phantom doesn't work with sendTransaction
-  const signed = await signTransaction(tx);
-  const signature = await connection.sendRawTransaction(signed.serialize());
+  const signature = await sendTransaction(tx, connection);
 
   // Confirm with timeout to prevent infinite retry loops
   try {

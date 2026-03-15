@@ -333,7 +333,7 @@ const PostCard: FC<{
   onRemainingChange?: (r: number | ((prev: number) => number)) => void;
 }> = ({ post, onViewProfile, isLiked: initialLiked, isPurchased: initialPurchased, wallet, authorProfile, sharedBuyCost = 43, sharedRemaining = 0, onRemainingChange }) => {
   const { t } = useI18n();
-  const { signTransaction } = useWallet();
+  const { sendTransaction } = useWallet();
   const { connection } = useConnection();
 
   const [liked, setLiked] = useState(initialLiked);
@@ -456,7 +456,7 @@ const PostCard: FC<{
       const sig = await transferSkrSplit({
         fromWallet: new PublicKey(wallet),
         recipients,
-        signTransaction: signTransaction!,
+        sendTransaction,
         connection,
       });
 
