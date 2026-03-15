@@ -193,20 +193,28 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       
       ctx.drawImage(img, 0, 0);
       
-      // Add semi-transparent watermark
-      const fontSize = Math.max(canvas.width, canvas.height) * 0.08;
+      // Add semi-transparent watermark (larger, horizontal, more visible)
+      const fontSize = Math.max(canvas.width, canvas.height) * 0.12;
       ctx.font = `900 ${fontSize}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      
+      // Center watermark (horizontal)
+      ctx.fillText('SOLIA', canvas.width / 2, canvas.height / 2);
+      
+      // Add corner watermarks for better coverage
       ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate(-25 * Math.PI / 180);
-      ctx.fillText('SOLIA', 0, 0);
+      ctx.font = `900 ${fontSize * 0.6}px Arial`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.textAlign = 'left';
+      ctx.fillText('SOLIA', 20, 40);
+      ctx.textAlign = 'right';
+      ctx.fillText('SOLIA', canvas.width - 20, canvas.height - 20);
       ctx.restore();
       
       // Add diagonal pattern
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
       ctx.lineWidth = 2;
       for (let i = -canvas.height; i < canvas.width + canvas.height; i += 80) {
         ctx.beginPath();
