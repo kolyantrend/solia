@@ -35,11 +35,11 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
 
             const adapters: any[] = [window._solflareAdapter];
 
-            // Include MWA on all Android mobile — needed for Seeker (Solana Mobile) built-in wallet.
-            // In Phantom/Solflare in-app browsers, their wallets auto-register via Wallet Standard
-            // and take priority over MWA. MWA is a fallback for Seeker and other MWA-compatible wallets.
-            const isAndroidMobile = /Android/i.test(navigator.userAgent);
-            if (isAndroidMobile) {
+            // MWA only for Seeker / Solana Mobile dApp Store (NOT mobile web browsers).
+            // On mobile Chrome, MWA WebSocket drops when switching to Phantom app → instant bounce-back.
+            // Phantom/Solflare auto-register via Wallet Standard in their in-app browsers.
+            const isSolanaMobile = typeof (window as any).__solanaMobile !== 'undefined';
+            if (isSolanaMobile) {
                 adapters.unshift(
                     new SolanaMobileWalletAdapter({
                         addressSelector: createDefaultAddressSelector(),

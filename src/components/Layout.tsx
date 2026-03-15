@@ -8,24 +8,20 @@ import { getProfile } from '../lib/database';
 import { getTwitterAvatarUrl } from '../lib/utils';
 import { SolanaAvatar } from './SolanaAvatar';
 
-/** True when deep link modal should be shown instead of WalletMultiButton.
- *  - Telegram / iOS without wallet → show deep links (universal links trigger app chooser)
- *  - Android Chrome without wallet → false (MWA handles Chrome→Phantom→Chrome flow)
- *  - Wallet in-app browsers → false (wallet auto-detected via Wallet Standard)
- *  - Seeker / Solana Mobile → false (MWA via WalletMultiButton) */
+/** True when on mobile/in-app browser WITHOUT an injected wallet.
+ *  Shows deep link modal (Phantom/Solflare browse links) instead of WalletMultiButton.
+ *  MWA does NOT work from Chrome (WebSocket drops on app switch).
+ *  Returns false inside wallet in-app browsers (wallet auto-detected) and on Seeker. */
 const isMobileWebNoWallet = () => {
   if (typeof window === 'undefined') return false;
   const ua = navigator.userAgent;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+  const isTelegram = /Telegram/i.test(ua) || !!(window as any).TelegramWebviewProxy;
   const hasWallet = 'solana' in window || 'phantom' in window || 'solflare' in window;
   if (hasWallet) return false;
   const isSolanaMobile = typeof (window as any).__solanaMobile !== 'undefined';
   if (isSolanaMobile) return false;
-  const isTelegram = /Telegram/i.test(ua) || !!(window as any).TelegramWebviewProxy;
-  if (isTelegram) return true;
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
-  if (isIOS) return true;
-  // Android Chrome/other browsers: MWA works → use WalletMultiButton
-  return false;
+  return isMobile || isTelegram;
 };
 
 const PHANTOM_ICON = '/Phantom.jpg';
