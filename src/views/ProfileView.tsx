@@ -229,30 +229,30 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
 
   const handleDownload = async (work: WorkItem) => {
     const fileName = `solia_${work.prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
-    // Use original URL if available (for owners), otherwise use public URL
     const downloadUrl = work.originalUrl || work.imageUrl;
 
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
-      // Strategy 1: Share URL via system share sheet (Chrome, Telegram, etc.)
-      // User picks Chrome → image opens → can save from there
+      // Strategy 1: Share URL immediately (preserves user gesture — no async before share)
       if (navigator.share) {
         try {
-          // Try sharing as file first (works on some devices)
-          const res = await fetch(downloadUrl);
-          const blob = await res.blob();
-          const file = new File([blob], fileName, { type: blob.type || 'image/webp' });
-          if (navigator.canShare?.({ files: [file] })) {
-            await navigator.share({ files: [file], title: 'Solia AI Art' });
-            return;
-          }
-        } catch { /* file share failed, try URL share */ }
-        try {
-          await navigator.share({ url: downloadUrl, title: 'Solia AI Art — Save Image' });
+          await navigator.share({ url: downloadUrl, title: 'Save Solia Image', text: 'Open in browser to save' });
           return;
-        } catch { /* user cancelled or share failed */ }
+        } catch (e: any) {
+          // AbortError = user cancelled share sheet, that's fine
+          if (e?.name === 'AbortError') return;
+        }
       }
-      // Strategy 2: Copy link to clipboard as last resort
+      // Strategy 2: Open in Chrome via Android intent (works from any WebView)
+      if (/Android/i.test(navigator.userAgent)) {
+        try {
+          const url = new URL(downloadUrl);
+          const intentUrl = `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=https;package=com.android.chrome;end`;
+          window.location.href = intentUrl;
+          return;
+        } catch { /* intent failed */ }
+      }
+      // Strategy 3: Copy link to clipboard
       try {
         await navigator.clipboard.writeText(downloadUrl);
         setDownloadCopied(true);

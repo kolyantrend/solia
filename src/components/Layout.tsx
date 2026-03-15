@@ -21,6 +21,29 @@ const isMobileWebNoWallet = () => {
 const PHANTOM_ICON = '/Phantom.jpg';
 const SOLFLARE_ICON = '/Solflare.jpg';
 
+/** Generate Phantom browse deep link — intent:// for Android WebViews (Telegram etc.), universal link for Chrome/iOS */
+const getPhantomBrowseUrl = (targetUrl: string) => {
+  const encoded = encodeURIComponent(targetUrl);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isChrome = /Chrome/i.test(navigator.userAgent) && !/Telegram|OPR|Edge/i.test(navigator.userAgent);
+  // Chrome handles universal links natively; other Android WebViews need intent://
+  if (isAndroid && !isChrome) {
+    return `intent://browse/${encoded}#Intent;scheme=phantom;package=app.phantom;S.browser_fallback_url=${encodeURIComponent('https://phantom.app')};end`;
+  }
+  return `https://phantom.app/ul/browse/${encoded}?ref=${encodeURIComponent(window.location.origin)}`;
+};
+
+/** Generate Solflare browse deep link */
+const getSolflareBrowseUrl = (targetUrl: string) => {
+  const encoded = encodeURIComponent(targetUrl);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isChrome = /Chrome/i.test(navigator.userAgent) && !/Telegram|OPR|Edge/i.test(navigator.userAgent);
+  if (isAndroid && !isChrome) {
+    return `intent://ul/v1/browse/${encoded}#Intent;scheme=https;package=com.solflare.mobile;S.browser_fallback_url=${encodeURIComponent('https://solflare.com')};end`;
+  }
+  return `https://solflare.com/ul/v1/browse/${encoded}?ref=${encodeURIComponent(window.location.origin)}`;
+};
+
 interface LayoutProps {
   children: ReactNode;
   activeTab: string;
@@ -183,7 +206,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
             </p>
             <div className="flex flex-col gap-3">
               <a
-                href={`https://phantom.app/ul/browse/${encodeURIComponent(window.location.origin)}?ref=${encodeURIComponent(window.location.origin)}`}
+                href={getPhantomBrowseUrl(window.location.href)}
                 className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
               >
                 <img src={PHANTOM_ICON} alt="" className="w-10 h-10 rounded-xl" />
@@ -194,7 +217,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
                 <span className="text-zinc-500 text-lg">›</span>
               </a>
               <a
-                href={`https://solflare.com/ul/v1/browse/${encodeURIComponent(window.location.origin)}?ref=${encodeURIComponent(window.location.origin)}`}
+                href={getSolflareBrowseUrl(window.location.href)}
                 className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
               >
                 <img src={SOLFLARE_ICON} alt="" className="w-10 h-10 rounded-xl" />
