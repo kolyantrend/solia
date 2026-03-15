@@ -170,7 +170,10 @@ export async function transferSkrSplit({
 
   tx.feePayer = fromWallet;
 
-  // Don't set blockhash here — wallet adapter sets it fresh at sign time
+  // Explicitly set blockhash — mobile wallets (Phantom in-app) don't auto-set it
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  tx.recentBlockhash = blockhash;
+
   const signature = await sendTransaction(tx, connection);
 
   // Confirm with timeout to prevent infinite retry loops
