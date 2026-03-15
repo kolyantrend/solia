@@ -177,6 +177,59 @@ export async function verifyTwitterBio(
 }
 
 /**
+ * Add watermark to image blob
+ * @param blob - original image blob
+ */
+export async function addWatermark(blob: Blob): Promise<Blob> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(url); resolve(blob); return; }
+      
+      ctx.drawImage(img, 0, 0);
+      
+      // Add semi-transparent watermark
+      const fontSize = Math.max(canvas.width, canvas.height) * 0.08;
+      ctx.font = `900 ${fontSize}px Arial`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(-25 * Math.PI / 180);
+      ctx.fillText('SOLIA', 0, 0);
+      ctx.restore();
+      
+      // Add diagonal pattern
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+      ctx.lineWidth = 2;
+      for (let i = -canvas.height; i < canvas.width + canvas.height; i += 80) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + canvas.height, canvas.height);
+        ctx.stroke();
+      }
+      
+      canvas.toBlob(
+        (watermarkedBlob) => {
+          URL.revokeObjectURL(url);
+          resolve(watermarkedBlob || blob);
+        },
+        blob.type,
+        0.95,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(blob); };
+    img.src = url;
+  });
+}
+
+/**
  * Convert a Blob (PNG/JPG) to WebP using canvas.
  * Falls back to original blob if conversion fails.
  * @param blob - original image blob

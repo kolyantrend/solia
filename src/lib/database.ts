@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { convertToWebP } from './utils';
+import { convertToWebP, addWatermark } from './utils';
 
 // ========================
 // PROFILES
@@ -832,7 +832,10 @@ export async function getTopReferrersCreators(): Promise<{ wallet: string; creat
 export async function uploadImage(file: Blob, fileName: string): Promise<string | null> {
   if (!isSupabaseConfigured) return null;
   try {
-    const webpBlob = await convertToWebP(file, 0.65);
+    // Add watermark first
+    const watermarkedBlob = await addWatermark(file);
+    // Then convert to WebP
+    const webpBlob = await convertToWebP(watermarkedBlob, 0.65);
     const ext = webpBlob.type === 'image/webp' ? '.webp' : '.png';
     const path = `posts/${Date.now()}_${fileName.replace(/\.[^.]+$/, '')}${ext}`;
     const { error } = await supabase.storage
