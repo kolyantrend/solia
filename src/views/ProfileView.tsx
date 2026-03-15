@@ -231,35 +231,10 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     const fileName = `solia_${work.prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
     const downloadUrl = work.originalUrl || work.imageUrl;
 
-    const ua = navigator.userAgent;
-    const isAndroid = /Android/i.test(ua);
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
-
-    if (isAndroid) {
-      // Android: open image in Chrome via intent — Chrome will display/download it
-      // Add ?download= param for Supabase auto-download with Content-Disposition header
-      try {
-        const dlUrl = new URL(downloadUrl);
-        dlUrl.searchParams.set('download', fileName);
-        const intentUrl = `intent://${dlUrl.host}${dlUrl.pathname}${dlUrl.search}#Intent;scheme=https;package=com.android.chrome;end`;
-        window.location.href = intentUrl;
-      } catch {
-        // Fallback: copy link
-        try { await navigator.clipboard.writeText(downloadUrl); } catch {}
-        setDownloadCopied(true);
-        setTimeout(() => setDownloadCopied(false), 3000);
-      }
-      return;
-    }
-
-    if (isIOS) {
-      // iOS: try share, then copy link
-      if (navigator.share) {
-        try {
-          await navigator.share({ url: downloadUrl, title: 'Save Solia Image' });
-          return;
-        } catch { /* cancelled or failed */ }
-      }
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      // Mobile in-app browsers block all download methods.
+      // Copy direct image link to clipboard — user pastes in Chrome to save.
       try { await navigator.clipboard.writeText(downloadUrl); } catch {}
       setDownloadCopied(true);
       setTimeout(() => setDownloadCopied(false), 3000);

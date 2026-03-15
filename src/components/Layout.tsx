@@ -8,47 +8,34 @@ import { getProfile } from '../lib/database';
 import { getTwitterAvatarUrl } from '../lib/utils';
 import { SolanaAvatar } from './SolanaAvatar';
 
-/** True when on mobile/in-app browser WITHOUT an injected wallet (Chrome, Safari, Telegram, etc.) */
+/** True when on mobile/in-app browser WITHOUT an injected wallet (Chrome, Safari, Telegram, etc.)
+ *  Returns false inside wallet in-app browsers (Phantom/Solflare inject window.solana/phantom/solflare)
+ *  Returns false on Seeker/Solana Mobile (MWA handles wallet connection via WalletMultiButton) */
 const isMobileWebNoWallet = () => {
   if (typeof window === 'undefined') return false;
   const ua = navigator.userAgent;
   const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
   const isTelegram = /Telegram/i.test(ua) || !!(window as any).TelegramWebviewProxy;
   const hasWallet = 'solana' in window || 'phantom' in window || 'solflare' in window;
+  // Seeker / Solana Mobile dApp Store — MWA works, use normal WalletMultiButton
+  const isSolanaMobile = typeof (window as any).__solanaMobile !== 'undefined';
+  if (isSolanaMobile) return false;
   return (isMobile || isTelegram) && !hasWallet;
 };
 
 const PHANTOM_ICON = '/Phantom.jpg';
 const SOLFLARE_ICON = '/Solflare.jpg';
 
-/** Generate Phantom browse deep link.
- *  Chrome: universal link (Chrome handles it natively → opens Phantom).
- *  Non-Chrome Android (Telegram etc.): intent to open Chrome with the universal link → Chrome → Phantom. */
-const getPhantomBrowseUrl = (targetUrl: string) => {
-  const universalLink = `https://phantom.app/ul/browse/${encodeURIComponent(targetUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
-  const ua = navigator.userAgent;
-  const isAndroid = /Android/i.test(ua);
-  const isStandardChrome = /Chrome/i.test(ua) && !/Telegram|OPR|Edge|SamsungBrowser/i.test(ua);
-  // From non-Chrome Android WebViews, open Chrome first — Chrome handles the universal link
-  if (isAndroid && !isStandardChrome) {
-    const url = new URL(universalLink);
-    return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=https;package=com.android.chrome;end`;
-  }
-  return universalLink;
+const isTelegramBrowser = () => {
+  if (typeof window === 'undefined') return false;
+  return /Telegram/i.test(navigator.userAgent) || !!(window as any).TelegramWebviewProxy;
 };
 
-/** Generate Solflare browse deep link */
-const getSolflareBrowseUrl = (targetUrl: string) => {
-  const universalLink = `https://solflare.com/ul/v1/browse/${encodeURIComponent(targetUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
-  const ua = navigator.userAgent;
-  const isAndroid = /Android/i.test(ua);
-  const isStandardChrome = /Chrome/i.test(ua) && !/Telegram|OPR|Edge|SamsungBrowser/i.test(ua);
-  if (isAndroid && !isStandardChrome) {
-    const url = new URL(universalLink);
-    return `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=https;package=com.android.chrome;end`;
-  }
-  return universalLink;
-};
+const getPhantomBrowseUrl = (targetUrl: string) =>
+  `https://phantom.app/ul/browse/${encodeURIComponent(targetUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
+
+const getSolflareBrowseUrl = (targetUrl: string) =>
+  `https://solflare.com/ul/v1/browse/${encodeURIComponent(targetUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
 
 interface LayoutProps {
   children: ReactNode;
@@ -207,36 +194,67 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
                 <X size={18} />
               </button>
             </div>
-            <p className="text-sm text-zinc-400 mb-4">
-              Open Solia inside your wallet app to connect:
-            </p>
-            <div className="flex flex-col gap-3">
-              <a
-                href={getPhantomBrowseUrl(window.location.href)}
-                className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
-              >
-                <img src={PHANTOM_ICON} alt="" className="w-10 h-10 rounded-xl" />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-zinc-100">Phantom</div>
-                  <div className="text-xs text-zinc-400">Open in Phantom Browser</div>
+
+            {isTelegramBrowser() ? (
+              <>
+                <p className="text-sm text-zinc-400 mb-4">
+                  Telegram browser does not support wallet deep links. Please open this page in Chrome:
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.href);
+                      const btn = document.getElementById('tg-copy-btn');
+                      if (btn) btn.textContent = '✓ Copied!';
+                    }}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-left"
+                  >
+                    <Globe className="w-10 h-10 text-indigo-400 shrink-0" />
+                    <div className="flex-1">
+                      <div id="tg-copy-btn" className="text-sm font-semibold text-zinc-100">Copy Link</div>
+                      <div className="text-xs text-zinc-400">Paste in Chrome → connect wallet</div>
+                    </div>
+                    <span className="text-zinc-500 text-lg">›</span>
+                  </button>
                 </div>
-                <span className="text-zinc-500 text-lg">›</span>
-              </a>
-              <a
-                href={getSolflareBrowseUrl(window.location.href)}
-                className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
-              >
-                <img src={SOLFLARE_ICON} alt="" className="w-10 h-10 rounded-xl" />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-zinc-100">Solflare</div>
-                  <div className="text-xs text-zinc-400">Open in Solflare Browser</div>
+                <p className="text-xs text-zinc-500 mt-4 text-center">
+                  Or tap ⋮ → "Open in..." to open in Chrome directly
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-400 mb-4">
+                  Open Solia inside your wallet app to connect:
+                </p>
+                <div className="flex flex-col gap-3">
+                  <a
+                    href={getPhantomBrowseUrl(window.location.href)}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
+                  >
+                    <img src={PHANTOM_ICON} alt="" className="w-10 h-10 rounded-xl" />
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-zinc-100">Phantom</div>
+                      <div className="text-xs text-zinc-400">Open in Phantom Browser</div>
+                    </div>
+                    <span className="text-zinc-500 text-lg">›</span>
+                  </a>
+                  <a
+                    href={getSolflareBrowseUrl(window.location.href)}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
+                  >
+                    <img src={SOLFLARE_ICON} alt="" className="w-10 h-10 rounded-xl" />
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-zinc-100">Solflare</div>
+                      <div className="text-xs text-zinc-400">Open in Solflare Browser</div>
+                    </div>
+                    <span className="text-zinc-500 text-lg">›</span>
+                  </a>
                 </div>
-                <span className="text-zinc-500 text-lg">›</span>
-              </a>
-            </div>
-            <p className="text-xs text-zinc-500 mt-4 text-center">
-              The site will open inside the wallet app where connection is automatic
-            </p>
+                <p className="text-xs text-zinc-500 mt-4 text-center">
+                  The site will open inside the wallet app where connection is automatic
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
