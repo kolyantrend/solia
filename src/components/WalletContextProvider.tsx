@@ -32,23 +32,23 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
                 if (!window._phantomAdapter) window._phantomAdapter = new PhantomWalletAdapter();
                 
                 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-                const walletList: any[] = [window._phantomAdapter, window._solflareAdapter];
                 
-                // Only add MWA for native Android apps (Saga phone / Solana Mobile dApp Store)
-                // Skip on mobile web browsers — Phantom/Solflare handle deep linking natively
-                if (isMobile && typeof (window as any).__solanaMobile !== 'undefined') {
-                    walletList.unshift(
+                if (isMobile) {
+                    // Mobile: MWA handles deep linking to Phantom/Solflare apps
+                    return [
                         new SolanaMobileWalletAdapter({
                             addressSelector: createDefaultAddressSelector(),
                             appIdentity: { name: 'Solia', icon: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Logo%20New.png', uri: 'https://solia.live' },
                             authorizationResultCache: createDefaultAuthorizationResultCache(),
                             cluster: 'mainnet-beta',
                             onWalletNotFound: createDefaultWalletNotFoundHandler(),
-                        })
-                    );
+                        }),
+                        window._solflareAdapter,
+                    ];
                 }
                 
-                return walletList;
+                // Desktop: Phantom/Solflare browser extensions
+                return [window._phantomAdapter, window._solflareAdapter];
             }
             return [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
         },
