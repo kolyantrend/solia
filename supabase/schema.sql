@@ -33,6 +33,7 @@ create table if not exists posts (
   id uuid default gen_random_uuid() primary key,
   author text not null,
   image_url text not null,
+  original_url text,
   prompt text not null default '',
   category text default 'Main',
   aspect_ratio text default '1:1',
@@ -256,3 +257,7 @@ create policy "Public read images"
 create policy "Public upload images"
   on storage.objects for insert
   with check (bucket_id = 'images');
+
+-- 13. Add original_url column to posts (for owner downloads without watermark)
+-- Run this if the column doesn't exist yet:
+alter table posts add column if not exists original_url text;

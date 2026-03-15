@@ -196,7 +196,7 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       // Add semi-transparent watermark
       const fontSize = Math.max(canvas.width, canvas.height) * 0.08;
       ctx.font = `900 ${fontSize}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.save();
@@ -206,7 +206,7 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       ctx.restore();
       
       // Add diagonal pattern
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
       ctx.lineWidth = 2;
       for (let i = -canvas.height; i < canvas.width + canvas.height; i += 80) {
         ctx.beginPath();

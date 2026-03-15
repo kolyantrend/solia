@@ -9,6 +9,7 @@ import { getTwitterAvatarUrl, fetchTwitterDisplayName, extractTwitterUsername, v
 interface WorkItem {
   id: string;
   imageUrl: string;
+  originalUrl?: string;
   prompt: string;
   category: string;
   aspectRatio?: string;
@@ -120,6 +121,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
       setWorks(posts.map((p) => ({
         id: p.id,
         imageUrl: p.image_url,
+        originalUrl: p.original_url,
         prompt: p.prompt,
         category: p.category,
         aspectRatio: p.aspect_ratio,
@@ -127,6 +129,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
       setPurchased(purch.map((p) => ({
         id: p.id,
         imageUrl: p.image_url,
+        originalUrl: p.original_url,
         prompt: p.prompt,
         category: p.category,
         aspectRatio: p.aspect_ratio,
@@ -187,10 +190,12 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     }
   };
 
-  const handleDownload = async (url: string, prompt: string) => {
-    const fileName = `solia_${prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
+  const handleDownload = async (work: WorkItem) => {
+    const fileName = `solia_${work.prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
+    // Use original URL if available (for owners), otherwise use public URL
+    const downloadUrl = work.originalUrl || work.imageUrl;
     try {
-      const res = await fetch(url);
+      const res = await fetch(downloadUrl);
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -201,7 +206,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch {
-      window.open(url, '_blank');
+      window.open(downloadUrl, '_blank');
     }
   };
 
@@ -725,7 +730,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                   {promptCopied ? <><Check size={16} /> Copied!</> : <><Copy size={16} /> Copy Prompt</>}
                 </button>
                 <button
-                  onClick={() => handleDownload(viewingWork.imageUrl, viewingWork.prompt)}
+                  onClick={() => handleDownload(viewingWork)}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 transition-colors"
                 >
                   <Download size={16} /> Download

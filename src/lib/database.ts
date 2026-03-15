@@ -178,6 +178,7 @@ export interface DbPost {
   id: string;
   author: string;
   image_url: string;
+  original_url?: string;
   prompt: string;
   category: string;
   aspect_ratio: string;
@@ -268,6 +269,7 @@ export async function getUserPosts(wallet: string): Promise<DbPost[]> {
 export async function createPost(post: {
   author: string;
   image_url: string;
+  original_url?: string;
   prompt: string;
   category: string;
   aspect_ratio: string;
@@ -829,29 +831,44 @@ export async function getTopReferrersCreators(): Promise<{ wallet: string; creat
 // IMAGE UPLOAD (Supabase Storage)
 // ========================
 
-export async function uploadImage(file: Blob, fileName: string): Promise<string | null> {
+export async function uploadImage(file: Blob, fileName: string): Promise<{ publicUrl: string; originalUrl: string } | null> {
   if (!isSupabaseConfigured) return null;
   try {
-    // Add watermark first
+    const timestamp = Date.now();
+    const baseName = fileName.replace(/\.[^.]+$/, '');
+    
+    // Upload watermarked version (public)
     const watermarkedBlob = await addWatermark(file);
-    // Then convert to WebP
-    const webpBlob = await convertToWebP(watermarkedBlob, 0.65);
-    const ext = webpBlob.type === 'image/webp' ? '.webp' : '.png';
-    const path = `posts/${Date.now()}_${fileName.replace(/\.[^.]+$/, '')}${ext}`;
-    const { error } = await supabase.storage
+    const webpWatermarked = await convertToWebP(watermarkedBlob, 0.65);
+    const ext = webpWatermarked.type === 'image/webp' ? '.webp' : '.png';
+    const publicPath = `posts/${timestamp}_${baseName}${ext}`;
+    const { error: publicError } = await supabase.storage
       .from('images')
-      .upload(path, webpBlob, { contentType: webpBlob.type, cacheControl: '3600' });
+      .upload(publicPath, webpWatermarked, { contentType: webpWatermarked.type, cacheControl: '3600' });
 
-    if (error) {
-      console.error('Upload error:', error);
+    if (publicError) {
+      console.error('Upload error (public):', publicError);
       return null;
     }
 
-    const { data: urlData } = supabase.storage
+    // Upload original version (for owners)
+    const webpOriginal = await convertToWebP(file, 0.65);
+    const originalPath = `posts/${timestamp}_${baseName}_original${ext}`;
+    const { error: originalError } = await supabase.storage
       .from('images')
-      .getPublicUrl(path);
+      .upload(originalPath, webpOriginal, { contentType: webpOriginal.type, cacheControl: '3600' });
 
-    return urlData.publicUrl;
+    if (originalError) {
+      console.warn('Upload error (original):', originalError);
+    }
+
+    const { data: publicUrlData } = supabase.storage.from('images').getPublicUrl(publicPath);
+    const { data: originalUrlData } = supabase.storage.from('images').getPublicUrl(originalPath);
+
+    return {
+      publicUrl: publicUrlData.publicUrl,
+      originalUrl: originalError ? publicUrlData.publicUrl : originalUrlData.publicUrl,
+    };
   } catch (e) { console.warn('uploadImage:', e); return null; }
 }
 

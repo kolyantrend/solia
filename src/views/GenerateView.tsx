@@ -117,6 +117,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
 
         // Upload image to Supabase Storage
         let publicImageUrl = imageUrl;
+        let originalImageUrl = imageUrl;
         try {
           const base64Data = imageUrl.split(',')[1];
           const byteChars = atob(base64Data);
@@ -124,7 +125,10 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
           const blob = new Blob([byteArray], { type: 'image/png' });
           const uploaded = await db.uploadImage(blob, `gen_${Date.now()}.png`);
-          if (uploaded) publicImageUrl = uploaded;
+          if (uploaded) {
+            publicImageUrl = uploaded.publicUrl;
+            originalImageUrl = uploaded.originalUrl;
+          }
         } catch (e) { console.warn('Image upload fallback to base64:', e); }
 
         // Save post to Supabase
@@ -132,6 +136,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
         const dbPost = await db.createPost({
           author: walletAddr,
           image_url: publicImageUrl,
+          original_url: originalImageUrl,
           prompt,
           category: category || 'Main',
           aspect_ratio: aspectRatio,
