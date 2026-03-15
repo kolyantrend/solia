@@ -2,6 +2,8 @@ import { FC, ReactNode, useState, useEffect } from 'react';
 import { Home, ImagePlus, Trophy, User, Globe, Sun, Moon, Twitter, BarChart3, Wallet, X } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
+import { usePhantomDeeplink } from '../contexts/PhantomDeeplinkContext';
 import { useI18n, LANG_LABELS, Lang } from '../i18n';
 import { useTheme } from '../theme';
 import { getProfile } from '../lib/database';
@@ -42,7 +44,8 @@ interface LayoutProps {
 export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
   const { t, lang, setLang } = useI18n();
   const { theme, toggle } = useTheme();
-  const { publicKey } = useWallet();
+  const { publicKey } = useUnifiedWallet();
+  const phantomDeeplink = usePhantomDeeplink();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [showMobileWallet, setShowMobileWallet] = useState(false);
@@ -115,7 +118,14 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
             )}
           </div>
           <div className="scale-[0.75] sm:scale-90 origin-right">
-            {isMobileWebNoWallet() && !publicKey ? (
+            {phantomDeeplink.connected ? (
+              <button
+                onClick={phantomDeeplink.disconnect}
+                className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 h-7 sm:h-8 px-2 sm:px-3 rounded-xl text-[10px] sm:text-xs font-medium text-zinc-300 transition-colors whitespace-nowrap"
+              >
+                <Wallet size={12} /> {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
+              </button>
+            ) : isMobileWebNoWallet() && !publicKey ? (
               <button
                 onClick={() => setShowMobileWallet(true)}
                 className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 h-7 sm:h-8 px-2 sm:px-3 rounded-xl text-[10px] sm:text-xs font-medium text-zinc-300 transition-colors whitespace-nowrap"
@@ -191,36 +201,47 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
               </button>
             </div>
 
-            <p className="text-sm text-zinc-400 mb-4">
-              Open Solia inside your wallet app to connect:
+            <p className="text-sm text-zinc-400 mb-3">
+              Connect your wallet:
             </p>
             <div className="flex flex-col gap-3">
-              <a
-                href={getPhantomBrowseUrl(window.location.href)}
-                className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
+              {/* Phantom deeplink connect: Chrome→Phantom→approve→Chrome */}
+              <button
+                onClick={() => { setShowMobileWallet(false); phantomDeeplink.connect(); }}
+                className="flex items-center gap-3 p-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition-colors text-left"
               >
                 <img src={PHANTOM_ICON} alt="" className="w-10 h-10 rounded-xl" />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-zinc-100">Phantom</div>
-                  <div className="text-xs text-zinc-400">Open in Phantom Browser</div>
+                  <div className="text-sm font-semibold text-white">Phantom</div>
+                  <div className="text-xs text-indigo-200">Connect & stay in Chrome</div>
+                </div>
+                <span className="text-indigo-200 text-lg">›</span>
+              </button>
+
+              <div className="border-t border-zinc-800 pt-3 mt-1">
+                <p className="text-xs text-zinc-500 mb-2">Or open inside wallet browser:</p>
+              </div>
+              <a
+                href={getPhantomBrowseUrl(window.location.href)}
+                className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
+              >
+                <img src={PHANTOM_ICON} alt="" className="w-8 h-8 rounded-lg" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-zinc-200">Phantom Browser</div>
                 </div>
                 <span className="text-zinc-500 text-lg">›</span>
               </a>
               <a
                 href={getSolflareBrowseUrl(window.location.href)}
-                className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 transition-colors"
               >
-                <img src={SOLFLARE_ICON} alt="" className="w-10 h-10 rounded-xl" />
+                <img src={SOLFLARE_ICON} alt="" className="w-8 h-8 rounded-lg" />
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-zinc-100">Solflare</div>
-                  <div className="text-xs text-zinc-400">Open in Solflare Browser</div>
+                  <div className="text-sm font-medium text-zinc-200">Solflare Browser</div>
                 </div>
                 <span className="text-zinc-500 text-lg">›</span>
               </a>
             </div>
-            <p className="text-xs text-zinc-500 mt-4 text-center">
-              The site will open inside the wallet app where connection is automatic
-            </p>
           </div>
         </div>
       )}

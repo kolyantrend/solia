@@ -1,6 +1,6 @@
 import React, { FC, useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
+import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { Loader2, Sparkles, Image as ImageIcon, CheckCircle2, Settings2, Upload, X } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { useI18n } from '../i18n';
@@ -28,7 +28,7 @@ interface ImageFileData {
 
 export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenerate }) => {
   const { t } = useI18n();
-  const { publicKey, connected, sendTransaction } = useWallet();
+  const { publicKey, connected, sendTransaction } = useUnifiedWallet();
   const [prompt, setPrompt] = useState('');
   const [category, setCategory] = useState('Main');
   const [aspectRatio, setAspectRatio] = useState('16:9');

@@ -7,6 +7,7 @@ import { SolanaAvatar } from '../components/SolanaAvatar';
 import { useI18n } from '../i18n';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
+import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { PublicKey } from '@solana/web3.js';
 import * as db from '../lib/database';
 import { transferSkrSplit, TREASURY_WALLET } from '../lib/solana';
@@ -54,7 +55,7 @@ function shortAddr(addr: string) {
 
 export const FeedView: FC<{ posts: Post[]; onViewProfile?: (address: string) => void }> = ({ posts, onViewProfile }) => {
   const { t } = useI18n();
-  const { publicKey } = useWallet();
+  const { publicKey } = useUnifiedWallet();
   const wallet = publicKey?.toBase58() || '';
   const [activeSort, setActiveSort] = useState<SortMode>('new');
   const [activeCategory, setActiveCategory] = useState('Main');

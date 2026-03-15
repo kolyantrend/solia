@@ -1,6 +1,6 @@
 import { FC, useState, useEffect } from 'react';
 import { Save, Twitter, Send, Youtube, Users, ChevronLeft, ChevronRight, ImageIcon, Pencil, X, Monitor, Smartphone, Square, Loader2, Link2, Copy, Check, Download, UserPlus, UserMinus, ShoppingBag, History, ExternalLink, BadgeCheck, Shield } from 'lucide-react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { useI18n } from '../i18n';
 import * as db from '../lib/database';
 import { SolanaAvatar } from '../components/SolanaAvatar';
@@ -40,7 +40,7 @@ type ProfileTab = 'works' | 'purchased' | 'history';
 
 export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: string) => void }> = ({ viewAddress, onViewProfile }) => {
   const { t } = useI18n();
-  const { publicKey } = useWallet();
+  const { publicKey } = useUnifiedWallet();
 
   const walletAddr = publicKey?.toBase58() || '';
   const profileAddr = viewAddress || walletAddr;

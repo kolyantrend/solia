@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { WalletContextProvider } from './components/WalletContextProvider';
+import { PhantomDeeplinkProvider } from './contexts/PhantomDeeplinkContext';
 import { Layout } from './components/Layout';
 import { FeedView, Post } from './views/FeedView';
 import { GenerateView } from './views/GenerateView';
@@ -9,7 +10,7 @@ import { StatsView } from './views/StatsView';
 import { Key, ArrowLeft } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n';
 import { ThemeProvider } from './theme';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useUnifiedWallet } from './hooks/useUnifiedWallet';
 import { saveReferral, resolveRefCode } from './lib/database';
 
 declare global {
@@ -21,14 +22,15 @@ declare global {
   }
 }
 
-// Capture referral code from URL on first load
+// Capture referral code from URL on first load (skip phantom callback URLs)
 const REF_KEY = 'solia_ref';
 function captureReferral() {
+  const sp = new URLSearchParams(window.location.search);
+  if (sp.has('phantom')) return; // Skip during Phantom deeplink callbacks
   const params = new URLSearchParams(window.location.search);
   const ref = params.get('ref');
   if (ref) {
     sessionStorage.setItem(REF_KEY, ref);
-    // Clean URL
     const url = new URL(window.location.href);
     url.searchParams.delete('ref');
     window.history.replaceState({}, '', url.toString());
@@ -37,7 +39,7 @@ function captureReferral() {
 captureReferral();
 
 function AppContent() {
-  const { publicKey } = useWallet();
+  const { publicKey } = useUnifiedWallet();
 
   // Save referral when wallet connects
   useEffect(() => {
@@ -174,7 +176,9 @@ export default function App() {
     <ThemeProvider>
       <I18nProvider>
         <WalletContextProvider>
-          <AppContent />
+          <PhantomDeeplinkProvider>
+            <AppContent />
+          </PhantomDeeplinkProvider>
         </WalletContextProvider>
       </I18nProvider>
     </ThemeProvider>
