@@ -70,6 +70,24 @@
   animation-play-state: paused;
 }
 
+/* Jupiter Wallet Modal — center on mobile */
+dialog[role="dialog"] {
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  margin: auto !important;
+  padding: 0 !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border: none !important;
+}
+dialog[role="dialog"] > * {
+  margin: 0 auto;
+  max-width: min(420px, calc(100vw - 32px));
+  width: 100%;
+}
+
 /* Hide scrollbar utility */
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
