@@ -25,29 +25,11 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [showDisconnectMenu, setShowDisconnectMenu] = useState(false);
 
-  const handleConnect = useCallback(async () => {
-    const ua = navigator.userAgent;
-    const isAndroid = /Android/i.test(ua);
-    const hasInjectedWallet = 'solana' in window || 'phantom' in window;
-    if (isAndroid && !hasInjectedWallet) {
-      // Mobile Android Chrome: find MWA adapter and select it directly
-      // This skips the intermediate wallet selection modal
-      const mwa = jupiterWallet.wallets.find(
-        (w: any) => w.adapter.name === 'Mobile Wallet Adapter'
-      );
-      if (mwa) {
-        // Always disconnect first — if MWA was previously selected but canceled,
-        // select() is a no-op. Disconnecting resets the state so the system
-        // wallet chooser (Phantom / Wallet) always appears.
-        try { await jupiterWallet.disconnect(); } catch {}
-        jupiterWallet.select(mwa.adapter.name);
-        setTimeout(() => jupiterWallet.connect().catch(() => {}), 150);
-        return;
-      }
-    }
-    // Desktop / in-app browser / fallback: open Jupiter wallet modal
+  const handleConnect = useCallback(() => {
+    // Always use Jupiter's built-in modal — it handles MWA, Wallet Standard,
+    // in-app browsers, and reconnection after redirect correctly.
     setShowModal(true);
-  }, [jupiterWallet, setShowModal]);
+  }, [setShowModal]);
 
   const handleDisconnect = useCallback(async () => {
     try { await jupiterWallet.disconnect(); } catch {}

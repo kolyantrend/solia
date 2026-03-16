@@ -11,7 +11,7 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
         <UnifiedWalletProvider
             wallets={[]} // Empty array - Jupiter auto-detects all wallets via Wallet Standard + MWA
             config={{
-                autoConnect: false, // Prevents MWA bounce-back on Android Chrome
+                autoConnect: true, // Jupiter handles MWA reconnection after redirect correctly
                 env: 'mainnet-beta',
                 metadata: {
                     name: 'Solia',
