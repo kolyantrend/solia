@@ -487,8 +487,16 @@ const PostCard: FC<{
     }
   };
 
-  const handleShare = () => {
-    const text = `Check out this art on Solia!`;
+  const handleShare = async () => {
+    let refParam = '';
+    if (wallet) {
+      try {
+        const code = await db.getOrCreateRefCode(wallet);
+        if (code) refParam = `?ref=${code}`;
+      } catch {}
+    }
+    const link = `https://solia.live${refParam}`;
+    const text = `Turn your ideas into images with Solia AI and monetize your art.\n${link}`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };

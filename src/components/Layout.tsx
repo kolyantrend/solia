@@ -25,7 +25,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [showDisconnectMenu, setShowDisconnectMenu] = useState(false);
 
-  const handleConnect = useCallback(() => {
+  const handleConnect = useCallback(async () => {
     const ua = navigator.userAgent;
     const isAndroid = /Android/i.test(ua);
     const hasInjectedWallet = 'solana' in window || 'phantom' in window;
@@ -36,8 +36,12 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
         (w: any) => w.adapter.name === 'Mobile Wallet Adapter'
       );
       if (mwa) {
+        // Always disconnect first — if MWA was previously selected but canceled,
+        // select() is a no-op. Disconnecting resets the state so the system
+        // wallet chooser (Phantom / Wallet) always appears.
+        try { await jupiterWallet.disconnect(); } catch {}
         jupiterWallet.select(mwa.adapter.name);
-        setTimeout(() => jupiterWallet.connect().catch(() => {}), 100);
+        setTimeout(() => jupiterWallet.connect().catch(() => {}), 150);
         return;
       }
     }
