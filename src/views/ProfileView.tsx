@@ -231,17 +231,17 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     const fileName = `solia_${work.prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
     const downloadUrl = work.originalUrl || work.imageUrl;
 
+    // In-app browsers (Phantom/Solflare) block downloads — clipboard fallback only
+    const isInAppBrowser = 'solana' in window || 'phantom' in window || 'solflare' in window;
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      // Mobile in-app browsers block all download methods.
-      // Copy direct image link to clipboard — user pastes in Chrome to save.
+    if (isMobile && isInAppBrowser) {
       try { await navigator.clipboard.writeText(downloadUrl); } catch {}
       setDownloadCopied(true);
       setTimeout(() => setDownloadCopied(false), 3000);
       return;
     }
 
-    // Desktop: standard blob download
+    // Chrome (mobile & desktop): standard blob download
     try {
       const res = await fetch(downloadUrl);
       const blob = await res.blob();

@@ -1,21 +1,18 @@
 /**
- * Unified wallet hook — combines @solana/wallet-adapter (desktop/in-app browser)
- * with Phantom deeplink protocol (mobile Chrome).
+ * Unified wallet hook — thin wrapper around @solana/wallet-adapter-react useWallet.
+ * Jupiter Unified Wallet Kit handles all platforms (MWA, Wallet Standard, etc.)
  * 
  * All components should use this instead of useWallet() directly.
  */
 import { useWallet } from '@solana/wallet-adapter-react';
-import { usePhantomDeeplink } from '../contexts/PhantomDeeplinkContext';
 import { PublicKey, Transaction, Connection } from '@solana/web3.js';
-import { useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 
 export interface UnifiedWallet {
   publicKey: PublicKey | null;
   connected: boolean;
   /** sendTransaction compatible with @solana/wallet-adapter interface */
   sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
-  /** True when connected via deeplink (not adapter) */
-  isDeeplinkWallet: boolean;
 }
 
 const noopSendTransaction = async (): Promise<string> => {
@@ -23,40 +20,11 @@ const noopSendTransaction = async (): Promise<string> => {
 };
 
 export function useUnifiedWallet(): UnifiedWallet {
-  const adapterWallet = useWallet();
-  const deeplinkWallet = usePhantomDeeplink();
+  const wallet = useWallet();
 
-  // For deeplink wallet: wrap signAndSendTransaction to match sendTransaction interface
-  const deeplinkSendTx = useCallback(async (tx: Transaction, connection: Connection): Promise<string> => {
-    return deeplinkWallet.signAndSendTransaction(tx, connection);
-  }, [deeplinkWallet.signAndSendTransaction]);
-
-  return useMemo(() => {
-    // Prefer adapter wallet (desktop, in-app browser)
-    if (adapterWallet.publicKey) {
-      return {
-        publicKey: adapterWallet.publicKey,
-        connected: true,
-        sendTransaction: adapterWallet.sendTransaction,
-        isDeeplinkWallet: false,
-      };
-    }
-
-    // Fall back to deeplink wallet (mobile Chrome)
-    if (deeplinkWallet.publicKey) {
-      return {
-        publicKey: deeplinkWallet.publicKey,
-        connected: true,
-        sendTransaction: deeplinkSendTx,
-        isDeeplinkWallet: true,
-      };
-    }
-
-    return {
-      publicKey: null,
-      connected: false,
-      sendTransaction: noopSendTransaction,
-      isDeeplinkWallet: false,
-    };
-  }, [adapterWallet.publicKey, adapterWallet.sendTransaction, deeplinkWallet.publicKey, deeplinkSendTx]);
+  return useMemo(() => ({
+    publicKey: wallet.publicKey,
+    connected: wallet.connected,
+    sendTransaction: wallet.publicKey ? wallet.sendTransaction : noopSendTransaction,
+  }), [wallet.publicKey, wallet.connected, wallet.sendTransaction]);
 }

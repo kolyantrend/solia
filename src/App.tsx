@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { WalletContextProvider } from './components/WalletContextProvider';
-import { PhantomDeeplinkProvider } from './contexts/PhantomDeeplinkContext';
 import { Layout } from './components/Layout';
 import { FeedView, Post } from './views/FeedView';
 import { GenerateView } from './views/GenerateView';
@@ -25,8 +24,6 @@ declare global {
 // Capture referral code from URL on first load (skip phantom callback URLs)
 const REF_KEY = 'solia_ref';
 function captureReferral() {
-  const sp = new URLSearchParams(window.location.search);
-  if (sp.has('phantom')) return; // Skip during Phantom deeplink callbacks
   const params = new URLSearchParams(window.location.search);
   const ref = params.get('ref');
   if (ref) {
@@ -176,9 +173,7 @@ export default function App() {
     <ThemeProvider>
       <I18nProvider>
         <WalletContextProvider>
-          <PhantomDeeplinkProvider>
-            <AppContent />
-          </PhantomDeeplinkProvider>
+          <AppContent />
         </WalletContextProvider>
       </I18nProvider>
     </ThemeProvider>

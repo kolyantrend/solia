@@ -1,6 +1,6 @@
-import { FC, ReactNode, useState, useEffect } from 'react';
-import { Home, ImagePlus, Trophy, User, Globe, Sun, Moon, Twitter, BarChart3, Wallet, X } from 'lucide-react';
-import { UnifiedWalletButton } from '@jup-ag/wallet-adapter';
+import { FC, ReactNode, useState, useEffect, useCallback } from 'react';
+import { Home, ImagePlus, Trophy, User, Globe, Sun, Moon, Twitter, BarChart3, Wallet, X, LogOut } from 'lucide-react';
+import { useUnifiedWalletContext, useUnifiedWallet as useJupiterWallet } from '@jup-ag/wallet-adapter';
 import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { useI18n, LANG_LABELS, Lang } from '../i18n';
 import { useTheme } from '../theme';
@@ -8,11 +8,6 @@ import { getProfile } from '../lib/database';
 import { getTwitterAvatarUrl } from '../lib/utils';
 import { SolanaAvatar } from './SolanaAvatar';
 
-// Jupiter Unified Wallet Kit handles all wallet detection automatically:
-// - Desktop: browser extensions via Wallet Standard
-// - Android Chrome: MWA (system wallet chooser)
-// - iOS/Telegram: browse links to wallet apps
-// - In-app browsers: injected window.solana
 
 interface LayoutProps {
   children: ReactNode;
@@ -24,8 +19,36 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
   const { t, lang, setLang } = useI18n();
   const { theme, toggle } = useTheme();
   const { publicKey } = useUnifiedWallet();
+  const jupiterWallet = useJupiterWallet();
+  const { setShowModal } = useUnifiedWalletContext();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [showDisconnectMenu, setShowDisconnectMenu] = useState(false);
+
+  const handleConnect = useCallback(() => {
+    const ua = navigator.userAgent;
+    const isAndroid = /Android/i.test(ua);
+    const hasInjectedWallet = 'solana' in window || 'phantom' in window;
+    if (isAndroid && !hasInjectedWallet) {
+      // Mobile Android Chrome: find MWA adapter and select it directly
+      // This skips the intermediate wallet selection modal
+      const mwa = jupiterWallet.wallets.find(
+        (w: any) => w.adapter.name === 'Mobile Wallet Adapter'
+      );
+      if (mwa) {
+        jupiterWallet.select(mwa.adapter.name);
+        setTimeout(() => jupiterWallet.connect().catch(() => {}), 100);
+        return;
+      }
+    }
+    // Desktop / in-app browser / fallback: open Jupiter wallet modal
+    setShowModal(true);
+  }, [jupiterWallet, setShowModal]);
+
+  const handleDisconnect = useCallback(async () => {
+    try { await jupiterWallet.disconnect(); } catch {}
+    setShowDisconnectMenu(false);
+  }, [jupiterWallet]);
 
   useEffect(() => {
     if (!publicKey) { setUserAvatar(null); return; }
@@ -94,11 +117,35 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
               </div>
             )}
           </div>
-          <div className="scale-[0.75] sm:scale-90 origin-right">
-            <UnifiedWalletButton
-              buttonClassName="!bg-zinc-800 hover:!bg-zinc-700 !h-7 sm:!h-8 !px-2 sm:!px-3 !rounded-xl !text-[10px] sm:!text-xs !font-medium transition-colors !whitespace-nowrap"
-              currentUserClassName="!bg-zinc-800 hover:!bg-zinc-700 !h-7 sm:!h-8 !px-2 sm:!px-3 !rounded-xl !text-[10px] sm:!text-xs !font-medium transition-colors !whitespace-nowrap"
-            />
+          <div className="scale-[0.85] sm:scale-100 origin-right">
+            {publicKey ? (
+              <div className="relative">
+                <button
+                  onClick={() => setShowDisconnectMenu(!showDisconnectMenu)}
+                  className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 h-8 px-3 rounded-xl text-xs font-medium text-zinc-300 transition-colors whitespace-nowrap"
+                >
+                  <Wallet size={14} className="text-indigo-400" />
+                  {publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}
+                </button>
+                {showDisconnectMenu && (
+                  <div className="absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50 min-w-[140px]">
+                    <button
+                      onClick={handleDisconnect}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition-colors"
+                    >
+                      <LogOut size={14} /> Disconnect
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={handleConnect}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 h-8 px-4 rounded-xl text-xs font-semibold text-white transition-colors whitespace-nowrap shadow-lg shadow-indigo-500/20"
+              >
+                <Wallet size={14} /> Connect
+              </button>
+            )}
           </div>
         </div>
       </div>
