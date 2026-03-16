@@ -88,6 +88,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const [refItems, setRefItems] = useState<db.ReferralEntry[]>([]);
   const [refTotal, setRefTotal] = useState(0);
   const [refCopied, setRefCopied] = useState(false);
+  const [refProfiles, setRefProfiles] = useState<Map<string, db.Profile>>(new Map());
 
   // Temp state for edit modal
   const [tempTwitter, setTempTwitter] = useState('');
@@ -162,6 +163,12 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     db.getReferrals(profileAddr, refTab, refPage, 10).then(({ items, total }) => {
       setRefItems(items);
       setRefTotal(total);
+      // Batch-fetch profiles for avatars
+      if (items.length > 0) {
+        db.getProfilesBatch(items.map(r => r.wallet)).then(setRefProfiles);
+      } else {
+        setRefProfiles(new Map());
+      }
     });
   }, [profileAddr, refTab, refPage]);
 
@@ -671,7 +678,11 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                 {refItems.map((r) => (
                   <div key={r.wallet} className="flex items-center justify-between py-2 px-3 rounded-xl bg-zinc-950/50 border border-zinc-800/30">
                     <button onClick={() => onViewProfile?.(r.wallet)} className="flex items-center gap-2 hover:opacity-80">
-                      <SolanaAvatar size={24} />
+                      {(() => {
+                        const rp = refProfiles.get(r.wallet);
+                        const av = rp ? (getTwitterAvatarUrl(rp.twitter) || rp.avatar_url) : null;
+                        return av ? <img src={av} className="w-6 h-6 rounded-full object-cover" alt="" /> : <SolanaAvatar size={24} />;
+                      })()}
                       <span className="text-xs font-mono text-zinc-300">{shortAddr(r.wallet)}</span>
                     </button>
                     <div className="flex items-center gap-2">

@@ -383,7 +383,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           )}
         </button>
 
-        <p className="text-[11px] sm:text-xs text-zinc-500 text-center leading-snug">
+        <p className="text-[11px] sm:text-xs text-amber-400 text-center leading-snug font-medium">
           {t('gen.patience')}
         </p>
       </div>

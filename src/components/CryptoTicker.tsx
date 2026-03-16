@@ -12,22 +12,22 @@ interface CoinData {
 }
 
 // Binance symbols to track (symbol -> display name)
-const TRACKED_COINS: { symbol: string; name: string; binance: string }[] = [
-  { symbol: 'btc', name: 'Bitcoin', binance: 'BTCUSDT' },
-  { symbol: 'eth', name: 'Ethereum', binance: 'ETHUSDT' },
-  { symbol: 'sol', name: 'Solana', binance: 'SOLUSDT' },
-  { symbol: 'bnb', name: 'BNB', binance: 'BNBUSDT' },
-  { symbol: 'xrp', name: 'XRP', binance: 'XRPUSDT' },
-  { symbol: 'ada', name: 'Cardano', binance: 'ADAUSDT' },
-  { symbol: 'doge', name: 'Dogecoin', binance: 'DOGEUSDT' },
-  { symbol: 'avax', name: 'Avalanche', binance: 'AVAXUSDT' },
-  { symbol: 'dot', name: 'Polkadot', binance: 'DOTUSDT' },
-  { symbol: 'matic', name: 'Polygon', binance: 'MATICUSDT' },
+const TRACKED_COINS: { symbol: string; name: string; binance: string; logo: string; color: string }[] = [
+  { symbol: 'btc', name: 'Bitcoin', binance: 'BTCUSDT', logo: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png', color: '#F7931A' },
+  { symbol: 'eth', name: 'Ethereum', binance: 'ETHUSDT', logo: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png', color: '#627EEA' },
+  { symbol: 'sol', name: 'Solana', binance: 'SOLUSDT', logo: 'https://assets.coingecko.com/coins/images/4128/small/solana.png', color: '#9945FF' },
+  { symbol: 'bnb', name: 'BNB', binance: 'BNBUSDT', logo: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png', color: '#F3BA2F' },
+  { symbol: 'xrp', name: 'XRP', binance: 'XRPUSDT', logo: 'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png', color: '#00AAE4' },
+  { symbol: 'ada', name: 'Cardano', binance: 'ADAUSDT', logo: 'https://assets.coingecko.com/coins/images/975/small/cardano.png', color: '#0033AD' },
+  { symbol: 'doge', name: 'Dogecoin', binance: 'DOGEUSDT', logo: 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png', color: '#C2A633' },
+  { symbol: 'avax', name: 'Avalanche', binance: 'AVAXUSDT', logo: 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png', color: '#E84142' },
+  { symbol: 'dot', name: 'Polkadot', binance: 'DOTUSDT', logo: 'https://assets.coingecko.com/coins/images/12171/small/polkadot.png', color: '#E6007A' },
+  { symbol: 'matic', name: 'Polygon', binance: 'MATICUSDT', logo: 'https://assets.coingecko.com/coins/images/4713/small/polygon.png', color: '#8247E5' },
 ];
 
 export const CryptoTicker: FC = () => {
   const FALLBACK: CoinData[] = TRACKED_COINS.map((c) => ({
-    id: c.symbol, symbol: c.symbol, name: c.name, image: '',
+    id: c.symbol, symbol: c.symbol, name: c.name, image: c.logo,
     current_price: 0, price_change_percentage_24h: 0,
   }));
 
@@ -66,7 +66,7 @@ export const CryptoTicker: FC = () => {
         const data: CoinData[] = TRACKED_COINS.map((c) => {
           const t = tickers.find((tk) => tk.symbol === c.binance);
           return {
-            id: c.symbol, symbol: c.symbol, name: c.name, image: '',
+            id: c.symbol, symbol: c.symbol, name: c.name, image: c.logo,
             current_price: t ? parseFloat(t.lastPrice) : 0,
             price_change_percentage_24h: t ? parseFloat(t.priceChangePercent) : 0,
           };
@@ -101,7 +101,7 @@ export const CryptoTicker: FC = () => {
             {coin.image && (
               <img src={coin.image} alt={coin.symbol} className="w-4 h-4 rounded-full" referrerPolicy="no-referrer" />
             )}
-            <span className="text-xs font-semibold text-zinc-300 uppercase">{coin.symbol}</span>
+            <span className="text-xs font-semibold uppercase" style={{ color: TRACKED_COINS.find(c => c.symbol === coin.symbol)?.color || '#d4d4d8' }}>{coin.symbol}</span>
             <span className="text-xs text-zinc-100 font-medium">{formatPrice(coin.current_price)}</span>
             <span className={`flex items-center gap-0.5 text-[10px] font-medium ${
               coin.price_change_percentage_24h >= 0 ? 'text-emerald-400' : 'text-red-400'
