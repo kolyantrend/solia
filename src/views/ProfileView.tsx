@@ -644,8 +644,8 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
           <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 mb-4 space-y-2">
             <p className="text-xs font-semibold text-indigo-200">Referral Rewards</p>
             <div className="text-[11px] text-indigo-300/80 leading-relaxed space-y-1">
-              <p><span className="text-indigo-200 font-medium">Generation:</span> 20% of cost goes to you</p>
-              <p><span className="text-indigo-200 font-medium">Purchase:</span> 15% of cost goes to you</p>
+              <p><span className="text-indigo-200 font-medium">Generation:</span> 15% of cost goes to you + 10 bonus likes</p>
+              <p><span className="text-indigo-200 font-medium">Purchase:</span> 15% of cost goes to you + 15 bonus likes</p>
               <p><span className="text-indigo-200 font-medium">Bonus:</span> +5 likes for each invited user</p>
             </div>
             <p className="text-[10px] text-indigo-400/60 italic">More referral bonuses coming soon!</p>

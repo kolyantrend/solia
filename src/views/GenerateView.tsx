@@ -152,7 +152,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           aspectRatio,
         };
 
-        await db.grantBonusLikes(walletAddr, 10);
+        await db.grantBonusLikes(walletAddr, 8);
         db.markGenerationUsed(walletAddr);
         markPaid(false);
         onGenerate(newPost);
@@ -195,16 +195,18 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
       if (!alreadyPaid) {
         setIsPaying(true);
 
-        // Build referral split: 80% treasury + 20% referrer
+        // Build referral split: 85% treasury + 15% referrer
         const referrerWallet = await db.getReferrer(publicKey.toBase58());
         const recipients: { wallet: PublicKey; amount: number }[] = [];
+        const isSystemRef = referrerWallet === TREASURY_WALLET.toBase58();
 
-        if (referrerWallet) {
-          const treasuryAmount = Math.round(genCostSkr * 0.8 * 10) / 10;
-          const referrerAmount = Math.round(genCostSkr * 0.2 * 10) / 10;
+        if (referrerWallet && !isSystemRef) {
+          const treasuryAmount = Math.round(genCostSkr * 0.85 * 10) / 10;
+          const referrerAmount = Math.round(genCostSkr * 0.15 * 10) / 10;
           recipients.push({ wallet: TREASURY_WALLET, amount: treasuryAmount });
           recipients.push({ wallet: new PublicKey(referrerWallet), amount: referrerAmount });
         } else {
+          // No referrer or system referral: 100% treasury
           recipients.push({ wallet: TREASURY_WALLET, amount: genCostSkr });
         }
 
@@ -221,10 +223,15 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           from_wallet: publicKey.toBase58(),
           type: 'generation',
           total_amount: genCostSkr,
-          treasury_amount: referrerWallet ? Math.round(genCostSkr * 0.8 * 10) / 10 : genCostSkr,
-          referrer_wallet: referrerWallet || undefined,
-          referrer_amount: referrerWallet ? Math.round(genCostSkr * 0.2 * 10) / 10 : undefined,
+          treasury_amount: (referrerWallet && !isSystemRef) ? Math.round(genCostSkr * 0.85 * 10) / 10 : genCostSkr,
+          referrer_wallet: (referrerWallet && !isSystemRef) ? referrerWallet : undefined,
+          referrer_amount: (referrerWallet && !isSystemRef) ? Math.round(genCostSkr * 0.15 * 10) / 10 : undefined,
         });
+
+        // Grant bonus likes to referrer (+10) when their referral generates
+        if (referrerWallet && !isSystemRef) {
+          db.grantBonusLikes(referrerWallet, 10);
+        }
 
         setIsPaying(false);
         markPaid(true);

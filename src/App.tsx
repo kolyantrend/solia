@@ -10,7 +10,7 @@ import { Key, ArrowLeft } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n';
 import { ThemeProvider } from './theme';
 import { useUnifiedWallet } from './hooks/useUnifiedWallet';
-import { saveReferral, resolveRefCode } from './lib/database';
+import { saveReferral, resolveRefCode, getReferrer } from './lib/database';
 
 declare global {
   interface Window {
@@ -39,19 +39,29 @@ function AppContent() {
   const { publicKey } = useUnifiedWallet();
 
   // Save referral when wallet connects
+  // If no ref code, auto-register as system referral (treasury wallet)
+  const TREASURY = 'GqQ41MPh9b1HEt9V5FWnKZfPjdhjgnaPjPLCRcLsuprA';
   useEffect(() => {
     if (!publicKey) return;
-    const refCode = sessionStorage.getItem(REF_KEY);
-    if (!refCode) return;
     const myWallet = publicKey.toBase58();
-    // Resolve short ref code to wallet address
-    resolveRefCode(refCode).then((referrerWallet) => {
-      if (referrerWallet && referrerWallet !== myWallet) {
-        saveReferral(referrerWallet, myWallet).then(() => {
-          sessionStorage.removeItem(REF_KEY);
-        });
-      }
-    });
+    const refCode = sessionStorage.getItem(REF_KEY);
+    if (refCode) {
+      // Resolve short ref code to wallet address
+      resolveRefCode(refCode).then((referrerWallet) => {
+        if (referrerWallet && referrerWallet !== myWallet) {
+          saveReferral(referrerWallet, myWallet).then(() => {
+            sessionStorage.removeItem(REF_KEY);
+          });
+        }
+      });
+    } else {
+      // No ref code — assign treasury as referrer if user has no referrer yet
+      getReferrer(myWallet).then((existing) => {
+        if (!existing) {
+          saveReferral(TREASURY, myWallet);
+        }
+      });
+    }
   }, [publicKey]);
 
   return <AppInner />;

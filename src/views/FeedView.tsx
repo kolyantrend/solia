@@ -340,6 +340,10 @@ const PostCard: FC<{
   const [liked, setLiked] = useState(initialLiked);
   const [likes, setLikes] = useState(post.likes);
   const [purchased, setPurchased] = useState(initialPurchased);
+
+  // Sync liked/purchased when parent loads data async (after wallet reconnects)
+  useEffect(() => { setLiked(initialLiked); }, [initialLiked]);
+  useEffect(() => { setPurchased(initialPurchased); }, [initialPurchased]);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [buyLoading, setBuyLoading] = useState(false);
   const [buyError, setBuyError] = useState('');
@@ -431,25 +435,26 @@ const PostCard: FC<{
 
   const handleBuy = async () => {
     if (!wallet || buyLoading) return;
-    if (wallet === post.author) { setBuyError('You cannot buy your own post'); return; }
     setBuyLoading(true);
     setBuyError('');
     try {
-      // Build referral split: 70% creator + 15% treasury + 15% referrer
+      // Build referral split
       const referrerWallet = await db.getReferrer(wallet);
       const recipients: { wallet: PublicKey; amount: number }[] = [];
+      const isSystemRef = !referrerWallet || referrerWallet === TREASURY_WALLET.toBase58();
 
-      if (referrerWallet) {
-        const creatorAmount = Math.round(buyCostSkr * 0.70 * 10) / 10;
-        const treasuryAmount = Math.round(buyCostSkr * 0.15 * 10) / 10;
+      if (!isSystemRef) {
+        // With real referrer: 75% creator + 15% referrer + 10% treasury
+        const creatorAmount = Math.round(buyCostSkr * 0.75 * 10) / 10;
         const referrerAmount = Math.round(buyCostSkr * 0.15 * 10) / 10;
+        const treasuryAmount = Math.round(buyCostSkr * 0.10 * 10) / 10;
         recipients.push({ wallet: new PublicKey(post.author), amount: creatorAmount });
+        recipients.push({ wallet: new PublicKey(referrerWallet!), amount: referrerAmount });
         recipients.push({ wallet: TREASURY_WALLET, amount: treasuryAmount });
-        recipients.push({ wallet: new PublicKey(referrerWallet), amount: referrerAmount });
       } else {
-        // No referrer: 85% creator + 15% treasury
-        const creatorAmount = Math.round(buyCostSkr * 0.85 * 10) / 10;
-        const treasuryAmount = Math.round(buyCostSkr * 0.15 * 10) / 10;
+        // System referral / no referrer: 80% creator + 20% treasury
+        const creatorAmount = Math.round(buyCostSkr * 0.80 * 10) / 10;
+        const treasuryAmount = Math.round(buyCostSkr * 0.20 * 10) / 10;
         recipients.push({ wallet: new PublicKey(post.author), amount: creatorAmount });
         recipients.push({ wallet: TREASURY_WALLET, amount: treasuryAmount });
       }
@@ -467,13 +472,20 @@ const PostCard: FC<{
         from_wallet: wallet,
         type: 'purchase',
         total_amount: buyCostSkr,
-        treasury_amount: referrerWallet ? Math.round(buyCostSkr * 0.15 * 10) / 10 : Math.round(buyCostSkr * 0.15 * 10) / 10,
+        treasury_amount: isSystemRef ? Math.round(buyCostSkr * 0.20 * 10) / 10 : Math.round(buyCostSkr * 0.10 * 10) / 10,
         creator_wallet: post.author,
-        creator_amount: referrerWallet ? Math.round(buyCostSkr * 0.70 * 10) / 10 : Math.round(buyCostSkr * 0.85 * 10) / 10,
-        referrer_wallet: referrerWallet || undefined,
-        referrer_amount: referrerWallet ? Math.round(buyCostSkr * 0.15 * 10) / 10 : undefined,
+        creator_amount: isSystemRef ? Math.round(buyCostSkr * 0.80 * 10) / 10 : Math.round(buyCostSkr * 0.75 * 10) / 10,
+        referrer_wallet: !isSystemRef ? referrerWallet! : undefined,
+        referrer_amount: !isSystemRef ? Math.round(buyCostSkr * 0.15 * 10) / 10 : undefined,
         post_id: post.id,
       });
+
+      // Grant bonus likes: +10 to buyer
+      db.grantBonusLikes(wallet, 10);
+      // Grant bonus likes: +15 to referrer when referral purchases
+      if (!isSystemRef) {
+        db.grantBonusLikes(referrerWallet!, 15);
+      }
 
       // Record purchase in DB
       const ok = await db.purchasePost(wallet, post.id);
@@ -561,7 +573,7 @@ const PostCard: FC<{
             </button>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {wallet && wallet !== post.author && !purchased ? (
+            {wallet && !purchased ? (
               <button
                 onClick={() => setShowBuyModal(true)}
                 className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] sm:text-xs font-medium hover:bg-emerald-500/25 transition-colors whitespace-nowrap"

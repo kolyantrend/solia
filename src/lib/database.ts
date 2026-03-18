@@ -340,7 +340,7 @@ export async function unlikePost(wallet: string, postId: string): Promise<boolea
 // DAILY LIKES (Bot Protection)
 // ========================
 
-const BASE_DAILY_LIKES = 3;
+const BASE_DAILY_LIKES = 2;
 
 export async function getDailyLikes(wallet: string): Promise<{ used: number; bonus: number; remaining: number }> {
   if (!isSupabaseConfigured) return { used: 0, bonus: 0, remaining: BASE_DAILY_LIKES };
@@ -729,8 +729,11 @@ export async function saveReferral(referrerWallet: string, referredWallet: strin
       .from('referrals')
       .insert({ referrer_wallet: referrerWallet, referred_wallet: referredWallet });
     if (error && error.code !== '23505') { console.error('saveReferral:', error); return false; }
-    // Grant 5 bonus likes to referrer per invited user
-    await grantBonusLikes(referrerWallet, 5);
+    // Grant 5 bonus likes to referrer per invited user (skip for system/treasury referrer)
+    const TREASURY = 'GqQ41MPh9b1HEt9V5FWnKZfPjdhjgnaPjPLCRcLsuprA';
+    if (referrerWallet !== TREASURY) {
+      await grantBonusLikes(referrerWallet, 5);
+    }
     return true;
   } catch { return false; }
 }
