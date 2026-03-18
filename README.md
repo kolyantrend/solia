@@ -65,6 +65,11 @@ A decentralized social platform for AI creators to monetize their content on the
 - **Lucide React** - Beautiful icon library
 - **Motion** - Smooth animations
 
+### Mobile (Android)
+- **Capacitor** - Native Android wrapper for Solana Mobile dApp Store
+- **Deep Links** - Referral handling via `https://solia.live/?ref=CODE`
+- **MWA** - Mobile Wallet Adapter support (Phantom, Solflare mobile)
+
 ### Blockchain
 - **Solana Web3.js** - Blockchain interactions
 - **Jupiter Unified Wallet Kit** - Multi-wallet support (Phantom, Solflare, MWA)
@@ -124,6 +129,22 @@ npm run dev
 ```
 
 Visit `http://localhost:3000`
+
+### Android Build (Solana Mobile dApp Store)
+
+**Prerequisites:** Android Studio + Android SDK
+
+```bash
+# Build web + sync to Android
+npm run build:android
+
+# Open in Android Studio
+npm run cap:open
+```
+
+In Android Studio: **Build → Generate Signed Bundle / APK** to create the release APK/AAB.
+
+**Deep links:** The app handles `https://solia.live/?ref=CODE` for referrals on mobile via Android App Links.
 
 ## 🗄 Database Schema
 

@@ -35,3 +35,12 @@ tmp/
 
 # IDE config
 .windsurf/
+
+# Android (Capacitor) build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+android/app/release/
+*.apk
+*.aab

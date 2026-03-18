@@ -11,6 +11,8 @@ import { I18nProvider, useI18n } from './i18n';
 import { ThemeProvider } from './theme';
 import { useUnifiedWallet } from './hooks/useUnifiedWallet';
 import { saveReferral, resolveRefCode, getReferrer } from './lib/database';
+import { isNative } from './lib/platform';
+import { App as CapApp } from '@capacitor/app';
 
 declare global {
   interface Window {
@@ -21,7 +23,7 @@ declare global {
   }
 }
 
-// Capture referral code from URL on first load (skip phantom callback URLs)
+// Capture referral code from URL on first load (works for web)
 const REF_KEY = 'solia_ref';
 function captureReferral() {
   const params = new URLSearchParams(window.location.search);
@@ -34,6 +36,19 @@ function captureReferral() {
   }
 }
 captureReferral();
+
+// On mobile (Capacitor): listen for deep links like https://solia.live/?ref=CODE
+if (isNative) {
+  CapApp.addListener('appUrlOpen', (event) => {
+    try {
+      const url = new URL(event.url);
+      const ref = url.searchParams.get('ref');
+      if (ref) {
+        sessionStorage.setItem(REF_KEY, ref);
+      }
+    } catch { /* ignore malformed URLs */ }
+  });
+}
 
 function AppContent() {
   const { publicKey } = useUnifiedWallet();
