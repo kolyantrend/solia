@@ -90,6 +90,9 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const [refPage, setRefPage] = useState(0);
   const [refItems, setRefItems] = useState<db.ReferralEntry[]>([]);
   const [refTotal, setRefTotal] = useState(0);
+  const [refTotalAll, setRefTotalAll] = useState(0);
+  const [refTotalUsers, setRefTotalUsers] = useState(0);
+  const [refTotalCreators, setRefTotalCreators] = useState(0);
   const [refCopied, setRefCopied] = useState(false);
   const [refProfiles, setRefProfiles] = useState<Map<string, db.Profile>>(new Map());
 
@@ -169,10 +172,13 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   // Load referrals
   useEffect(() => {
     if (!profileAddr) return;
-    db.getReferrals(profileAddr, refTab, refPage, 10).then(({ items, total }) => {
+    db.getReferrals(profileAddr, refTab, refPage, 10).then(({ items, total, totalAll, totalUsers, totalCreators }) => {
       setRefItems(items);
       setRefTotal(total);
-      // Batch-fetch profiles for avatars
+      setRefTotalAll(totalAll);
+      setRefTotalUsers(totalUsers);
+      setRefTotalCreators(totalCreators);
+      // Batch-fetch profiles for avatars and display names
       if (items.length > 0) {
         db.getProfilesBatch(items.map(r => r.wallet)).then(setRefProfiles);
       } else {
@@ -443,23 +449,6 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         </div>
       </div>
 
-      {/* Daily Likes Counter */}
-      {isOwnProfile && dailyLikes && (
-        <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-zinc-200">❤️ Available Likes</span>
-            <span className="text-2xl font-bold text-pink-400">{dailyLikes.remaining}</span>
-          </div>
-          <div className="text-[11px] text-amber-400/90 leading-relaxed space-y-0.5">
-            <p>+2 free likes daily</p>
-            <p>+8 likes for each image you generate</p>
-            <p>+10 likes for each image you buy</p>
-            <p>+10 likes when your referral generates</p>
-            <p>+15 likes when your referral buys</p>
-          </div>
-        </div>
-      )}
-
       {/* Works / Purchased Tabs */}
       <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/50">
         {/* Tab Switcher */}
@@ -639,6 +628,23 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         ) : null}
       </div>
 
+      {/* Daily Likes Counter */}
+      {isOwnProfile && dailyLikes && (
+        <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-zinc-200">❤️ Available Likes</span>
+            <span className="text-2xl font-bold text-pink-400">{dailyLikes.remaining}</span>
+          </div>
+          <div className="text-[11px] text-amber-400/90 leading-relaxed space-y-0.5">
+            <p>+2 free likes daily</p>
+            <p>+8 likes for each image you generate</p>
+            <p>+10 likes for each image you buy</p>
+            <p>+10 likes when your referral generates</p>
+            <p>+15 likes when your referral buys</p>
+          </div>
+        </div>
+      )}
+
       {/* Referrals Section */}
       {isOwnProfile && (
         <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/50">
@@ -646,6 +652,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
             <div className="flex items-center gap-2">
               <Link2 size={16} className="text-indigo-400" />
               <h3 className="text-lg font-semibold">Referrals</h3>
+              <span className="text-xs font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full">{refTotalAll}</span>
             </div>
           </div>
 
@@ -685,7 +692,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                 refTab === 'user' ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
               }`}
             >
-              Users
+              Users ({refTotalUsers})
             </button>
             <button
               onClick={() => { setRefTab('creator'); setRefPage(0); }}
@@ -693,7 +700,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                 refTab === 'creator' ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
               }`}
             >
-              Creators
+              Creators ({refTotalCreators})
             </button>
           </div>
 
@@ -709,7 +716,14 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                         const av = rp ? (getTwitterAvatarUrl(rp.twitter) || rp.avatar_url) : null;
                         return av ? <img src={av} className="w-6 h-6 rounded-full object-cover" alt="" /> : <SolanaAvatar size={24} />;
                       })()}
-                      <span className="text-xs font-mono text-zinc-300">{shortAddr(r.wallet)}</span>
+                      <span className="text-xs text-zinc-300">
+                        {(() => {
+                          const rp = refProfiles.get(r.wallet);
+                          if (rp?.display_name) return rp.display_name;
+                          if (rp?.twitter) return `@${extractTwitterUsername(rp.twitter)}`;
+                          return shortAddr(r.wallet);
+                        })()}
+                      </span>
                     </button>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${

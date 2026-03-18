@@ -764,8 +764,8 @@ export async function getReferrals(
   filter: 'all' | 'user' | 'creator',
   page: number,
   pageSize = 10,
-): Promise<{ items: ReferralEntry[]; total: number }> {
-  if (!isSupabaseConfigured) return { items: [], total: 0 };
+): Promise<{ items: ReferralEntry[]; total: number; totalAll: number; totalUsers: number; totalCreators: number }> {
+  if (!isSupabaseConfigured) return { items: [], total: 0, totalAll: 0, totalUsers: 0, totalCreators: 0 };
   try {
     // Get all referrals for this referrer
     const { data: refs } = await supabase
@@ -774,7 +774,7 @@ export async function getReferrals(
       .eq('referrer_wallet', referrerWallet)
       .order('created_at', { ascending: false });
 
-    if (!refs || refs.length === 0) return { items: [], total: 0 };
+    if (!refs || refs.length === 0) return { items: [], total: 0, totalAll: 0, totalUsers: 0, totalCreators: 0 };
 
     // Get wallets that have at least one post (= creators)
     const wallets = refs.map((r) => r.referred_wallet);
@@ -785,19 +785,24 @@ export async function getReferrals(
 
     const creatorSet = new Set((creatorPosts || []).map((p) => p.author));
 
-    let entries: ReferralEntry[] = refs.map((r) => ({
+    const allEntries: ReferralEntry[] = refs.map((r) => ({
       wallet: r.referred_wallet,
       created_at: r.created_at,
       is_creator: creatorSet.has(r.referred_wallet),
     }));
 
+    const totalAll = allEntries.length;
+    const totalCreators = allEntries.filter((e) => e.is_creator).length;
+    const totalUsers = totalAll - totalCreators;
+
+    let entries = allEntries;
     if (filter === 'creator') entries = entries.filter((e) => e.is_creator);
     if (filter === 'user') entries = entries.filter((e) => !e.is_creator);
 
     const total = entries.length;
     const items = entries.slice(page * pageSize, (page + 1) * pageSize);
-    return { items, total };
-  } catch { return { items: [], total: 0 }; }
+    return { items, total, totalAll, totalUsers, totalCreators };
+  } catch { return { items: [], total: 0, totalAll: 0, totalUsers: 0, totalCreators: 0 }; }
 }
 
 export async function getTopReferrersCreators(): Promise<{ wallet: string; creator_count: number }[]> {
