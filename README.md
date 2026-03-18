@@ -21,27 +21,37 @@ A decentralized social platform for AI creators to monetize their content on the
 
 ### Advanced Features
 - **🧠 Smart Sorting Algorithms** - Time-decay scoring for natural content rotation
-- **🎁 Referral System** - Bring new users and earn from their activity (20% on generations, 15% on purchases)
+- **🎁 Referral System** - Bring new users and earn from their activity (15% on generations, 15% on purchases)
 - **👥 Follow System** - Build your creator network
 - **❤️ Like & Comment** - Engage with the community
-- **🛡️ Daily Like Limits** - Bot protection with bonus system (3 base + 10 per generation)
+- **🛡️ Daily Like Limits** - Bot protection with bonus system (2 base + 8 per generation + 10 per purchase)
 - **📜 Transaction History** - Track all platform activity
 - **🔒 Image Protection** - Download prevention with overlay shield
 
 ### Monetization Model
 
 **Image Generation Fees:**
-- With referrer: 80% treasury + 20% referrer
-- Without referrer: 100% treasury
+- With referrer: 85% treasury + 15% referrer
+- System referral (no ref link): 100% treasury
 
 **Image Purchase Splits:**
-- With referrer: 70% creator + 15% treasury + 15% referrer
-- Without referrer: 85% creator + 15% treasury
+- With referrer: 75% creator + 15% referrer + 10% treasury
+- System referral (no ref link): 80% creator + 20% treasury
+- Self-purchase: same splits apply
 
-**Examples:**
-- 100 SKR generation (with referrer) = 80 SKR treasury + 20 SKR referrer
-- 100 SKR purchase (with referrer) = 70 SKR creator + 15 SKR treasury + 15 SKR referrer
-- 100 SKR purchase (no referrer) = 85 SKR creator + 15 SKR treasury
+**Examples (100 SKR):**
+- Generation (with referrer) = 85 SKR treasury + 15 SKR referrer
+- Purchase (with referrer) = 75 SKR creator + 15 SKR referrer + 10 SKR treasury
+- Purchase (system referral) = 80 SKR creator + 20 SKR treasury
+
+**Like Bonuses:**
+- +8 likes per generated image (to creator)
+- +10 likes per purchased image (to buyer)
+- +10 likes to referrer when their referral generates
+- +15 likes to referrer when their referral purchases
+- +5 likes to referrer per new invited user
+
+**System Referral:** Users who visit `solia.live` without a `?ref=` code are automatically registered as system referrals (treasury). This means all referrer shares go to the treasury.
 
 **Atomic Transactions:** Solana guarantees all transfers succeed or all fail - no partial payments
 
@@ -57,7 +67,7 @@ A decentralized social platform for AI creators to monetize their content on the
 
 ### Blockchain
 - **Solana Web3.js** - Blockchain interactions
-- **Solana Wallet Adapter** - Multi-wallet support (Phantom, Solflare, Mobile)
+- **Jupiter Unified Wallet Kit** - Multi-wallet support (Phantom, Solflare, MWA)
 - **SPL Token** - SKR token operations
 
 ### Backend & Services
