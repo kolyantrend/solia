@@ -35,13 +35,13 @@ A decentralized social platform for AI creators to monetize their content on the
 - System referral (no ref link): 100% treasury
 
 **Image Purchase Splits:**
-- With referrer: 75% creator + 15% referrer + 10% treasury
+- With referrer: 80% creator + 10% referrer + 10% treasury
 - System referral (no ref link): 80% creator + 20% treasury
 - Self-purchase: same splits apply
 
 **Examples (100 SKR):**
 - Generation (with referrer) = 85 SKR treasury + 15 SKR referrer
-- Purchase (with referrer) = 75 SKR creator + 15 SKR referrer + 10 SKR treasury
+- Purchase (with referrer) = 80 SKR creator + 10 SKR referrer + 10 SKR treasury
 - Purchase (system referral) = 80 SKR creator + 20 SKR treasury
 
 **Like Bonuses:**

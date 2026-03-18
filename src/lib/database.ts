@@ -509,29 +509,32 @@ export async function purchasePost(wallet: string, postId: string, txSignature: 
     const { error } = await supabase
       .from('purchases')
       .insert({ buyer_wallet: wallet, post_id: postId, tx_signature: txSignature });
-    return !error;
-  } catch { return false; }
+    if (error) { console.warn('purchasePost error:', error); return false; }
+    return true;
+  } catch (e) { console.warn('purchasePost:', e); return false; }
 }
 
 export async function getPurchasedPosts(wallet: string): Promise<DbPost[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const { data: purchases } = await supabase
+    const { data: purchases, error: purchErr } = await supabase
       .from('purchases')
       .select('post_id')
       .eq('buyer_wallet', wallet)
       .order('created_at', { ascending: false });
 
+    if (purchErr) { console.warn('getPurchasedPosts purchases query:', purchErr); return []; }
     if (!purchases || purchases.length === 0) return [];
 
     const postIds = purchases.map((p: { post_id: string }) => p.post_id);
-    const { data: posts } = await supabase
+    const { data: posts, error: postsErr } = await supabase
       .from('posts')
       .select('*')
       .in('id', postIds);
 
+    if (postsErr) { console.warn('getPurchasedPosts posts query:', postsErr); return []; }
     return posts || [];
-  } catch { return []; }
+  } catch (e) { console.warn('getPurchasedPosts:', e); return []; }
 }
 
 // ========================
@@ -1103,12 +1106,13 @@ export async function getTransactionHistory(
   if (!isSupabaseConfigured) return { items: [], total: 0 };
   try {
     // Get transactions where user is sender, creator, or referrer
-    const { data, count } = await supabase
+    const { data, count, error } = await supabase
       .from('transactions')
       .select('*', { count: 'exact' })
       .or(`from_wallet.eq.${wallet},creator_wallet.eq.${wallet},referrer_wallet.eq.${wallet}`)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+    if (error) { console.warn('getTransactionHistory:', error); return { items: [], total: 0 }; }
     return { items: (data || []) as TransactionHistoryEntry[], total: count || 0 };
-  } catch { return { items: [], total: 0 }; }
+  } catch (e) { console.warn('getTransactionHistory:', e); return { items: [], total: 0 }; }
 }

@@ -77,6 +77,9 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const [verifyResult, setVerifyResult] = useState<'success' | 'fail' | null>(null);
   const [tweetUrl, setTweetUrl] = useState('');
 
+  // Daily likes
+  const [dailyLikes, setDailyLikes] = useState<{ used: number; bonus: number; remaining: number } | null>(null);
+
   // Transaction history
   const [txHistory, setTxHistory] = useState<db.TransactionHistoryEntry[]>([]);
   const [txTotal, setTxTotal] = useState(0);
@@ -155,6 +158,12 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   useEffect(() => {
     if (!isOwnProfile || !walletAddr) return;
     db.getOrCreateRefCode(walletAddr).then(setRefCode);
+  }, [isOwnProfile, walletAddr]);
+
+  // Load daily likes for own profile
+  useEffect(() => {
+    if (!isOwnProfile || !walletAddr) return;
+    db.getDailyLikes(walletAddr).then(setDailyLikes);
   }, [isOwnProfile, walletAddr]);
 
   // Load referrals
@@ -434,6 +443,23 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         </div>
       </div>
 
+      {/* Daily Likes Counter */}
+      {isOwnProfile && dailyLikes && (
+        <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-zinc-200">❤️ Available Likes</span>
+            <span className="text-2xl font-bold text-pink-400">{dailyLikes.remaining}</span>
+          </div>
+          <div className="text-[11px] text-amber-400/90 leading-relaxed space-y-0.5">
+            <p>+2 free likes daily</p>
+            <p>+8 likes for each image you generate</p>
+            <p>+10 likes for each image you buy</p>
+            <p>+10 likes when your referral generates</p>
+            <p>+15 likes when your referral buys</p>
+          </div>
+        </div>
+      )}
+
       {/* Works / Purchased Tabs */}
       <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/50">
         {/* Tab Switcher */}
@@ -645,7 +671,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
             <p className="text-xs font-semibold text-indigo-200">Referral Rewards</p>
             <div className="text-[11px] text-indigo-300/80 leading-relaxed space-y-1">
               <p><span className="text-indigo-200 font-medium">Generation:</span> 15% of cost goes to you + 10 bonus likes</p>
-              <p><span className="text-indigo-200 font-medium">Purchase:</span> 15% of cost goes to you + 15 bonus likes</p>
+              <p><span className="text-indigo-200 font-medium">Purchase:</span> 10% of cost goes to you + 15 bonus likes</p>
               <p><span className="text-indigo-200 font-medium">Bonus:</span> +5 likes for each invited user</p>
             </div>
             <p className="text-[10px] text-indigo-400/60 italic">More referral bonuses coming soon!</p>

@@ -444,9 +444,9 @@ const PostCard: FC<{
       const isSystemRef = !referrerWallet || referrerWallet === TREASURY_WALLET.toBase58();
 
       if (!isSystemRef) {
-        // With real referrer: 75% creator + 15% referrer + 10% treasury
-        const creatorAmount = Math.round(buyCostSkr * 0.75 * 10) / 10;
-        const referrerAmount = Math.round(buyCostSkr * 0.15 * 10) / 10;
+        // With real referrer: 80% creator + 10% referrer + 10% treasury
+        const creatorAmount = Math.round(buyCostSkr * 0.80 * 10) / 10;
+        const referrerAmount = Math.round(buyCostSkr * 0.10 * 10) / 10;
         const treasuryAmount = Math.round(buyCostSkr * 0.10 * 10) / 10;
         recipients.push({ wallet: new PublicKey(post.author), amount: creatorAmount });
         recipients.push({ wallet: new PublicKey(referrerWallet!), amount: referrerAmount });
@@ -474,9 +474,9 @@ const PostCard: FC<{
         total_amount: buyCostSkr,
         treasury_amount: isSystemRef ? Math.round(buyCostSkr * 0.20 * 10) / 10 : Math.round(buyCostSkr * 0.10 * 10) / 10,
         creator_wallet: post.author,
-        creator_amount: isSystemRef ? Math.round(buyCostSkr * 0.80 * 10) / 10 : Math.round(buyCostSkr * 0.75 * 10) / 10,
+        creator_amount: Math.round(buyCostSkr * 0.80 * 10) / 10,
         referrer_wallet: !isSystemRef ? referrerWallet! : undefined,
-        referrer_amount: !isSystemRef ? Math.round(buyCostSkr * 0.15 * 10) / 10 : undefined,
+        referrer_amount: !isSystemRef ? Math.round(buyCostSkr * 0.10 * 10) / 10 : undefined,
         post_id: post.id,
       });
 
@@ -488,7 +488,7 @@ const PostCard: FC<{
       }
 
       // Record purchase in DB
-      const ok = await db.purchasePost(wallet, post.id);
+      const ok = await db.purchasePost(wallet, post.id, sig);
       if (ok) setPurchased(true);
       setShowBuyModal(false);
     } catch (err: any) {
