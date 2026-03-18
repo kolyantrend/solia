@@ -3,8 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Solia - AI Content Platform</title>
+    <style>
+      /* Safe area insets for Capacitor Android (notch + nav buttons) */
+      :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+      }
+      body {
+        padding-top: var(--sat);
+        padding-bottom: var(--sab);
+        padding-left: var(--sal);
+        padding-right: var(--sar);
+      }
+      /* Jupiter wallet modal: always on top */
+      .wallet-adapter-modal-wrapper,
+      [class*="UnifiedWalletModal"],
+      div[data-radix-popper-content-wrapper] {
+        z-index: 9999 !important;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

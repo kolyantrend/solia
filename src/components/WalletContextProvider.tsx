@@ -1,5 +1,7 @@
 import { FC, ReactNode, useMemo } from 'react';
 import { UnifiedWalletProvider } from '@jup-ag/wallet-adapter';
+import { SolanaMobileWalletAdapter } from '@solana-mobile/wallet-adapter-mobile';
+import { isNative } from '../lib/platform';
 
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const endpoint = useMemo(
@@ -7,11 +9,28 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
         [],
     );
 
+    // On native (Capacitor), explicitly create the MWA adapter so wallet connection works in WebView
+    const wallets = useMemo(() => {
+        if (isNative) {
+            return [
+                new SolanaMobileWalletAdapter({
+                    appIdentity: {
+                        name: 'Solia',
+                        uri: 'https://solia.live',
+                        icon: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Logo%20New.png',
+                    },
+                    cluster: 'mainnet-beta',
+                } as any),
+            ];
+        }
+        return []; // Web: Jupiter auto-detects via Wallet Standard + MWA
+    }, []);
+
     return (
         <UnifiedWalletProvider
-            wallets={[]} // Empty array - Jupiter auto-detects all wallets via Wallet Standard + MWA
+            wallets={wallets}
             config={{
-                autoConnect: true, // Jupiter handles MWA reconnection after redirect correctly
+                autoConnect: true,
                 env: 'mainnet-beta',
                 metadata: {
                     name: 'Solia',

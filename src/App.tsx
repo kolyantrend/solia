@@ -13,6 +13,7 @@ import { useUnifiedWallet } from './hooks/useUnifiedWallet';
 import { saveReferral, resolveRefCode, getReferrer } from './lib/database';
 import { isNative } from './lib/platform';
 import { App as CapApp } from '@capacitor/app';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 declare global {
   interface Window {
@@ -37,8 +38,14 @@ function captureReferral() {
 }
 captureReferral();
 
-// On mobile (Capacitor): listen for deep links like https://solia.live/?ref=CODE
+// On mobile (Capacitor): configure native UI and listen for deep links
 if (isNative) {
+  // Status bar: don't overlay content, dark theme
+  StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+  StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+  StatusBar.setBackgroundColor({ color: '#09090b' }).catch(() => {});
+
+  // Deep links for referrals: https://solia.live/?ref=CODE
   CapApp.addListener('appUrlOpen', (event) => {
     try {
       const url = new URL(event.url);

@@ -145,7 +145,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[90] bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-800/50 pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 z-[90] bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-800/50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="flex justify-around items-center h-14 sm:h-16 px-1 sm:px-2 max-w-2xl mx-auto">
           <NavItem 
             icon={<Home size={20} />} 
