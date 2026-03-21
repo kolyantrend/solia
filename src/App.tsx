@@ -76,7 +76,12 @@ function AppInner() {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [viewingProfile, setViewingProfile] = useState<string | null>(null);
   const [previousTab, setPreviousTab] = useState<string>('feed');
-  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | null>(null);
+  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | null>(() => {
+    const path = window.location.pathname;
+    if (path === '/terms') return 'terms';
+    if (path === '/privacy') return 'privacy';
+    return null;
+  });
 
   useEffect(() => {
     const checkKey = async () => {
@@ -125,11 +130,37 @@ function AppInner() {
   const handleOpenLegal = (page: 'terms' | 'privacy') => {
     setPreviousTab(activeTab);
     setLegalPage(page);
+    window.history.pushState(null, '', `/${page}`);
   };
 
   const handleBackFromLegal = () => {
     setLegalPage(null);
+    window.history.pushState(null, '', '/');
   };
+
+  // Handle browser back/forward for legal pages
+  useEffect(() => {
+    const onPopState = () => {
+      const path = window.location.pathname;
+      if (path === '/terms') setLegalPage('terms');
+      else if (path === '/privacy') setLegalPage('privacy');
+      else setLegalPage(null);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // Direct URL access to /terms or /privacy — render standalone (no app shell, no wallet needed)
+  if (legalPage && window.location.pathname === `/${legalPage}`) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-50">
+        {legalPage === 'terms'
+          ? <TermsView />
+          : <PrivacyView />
+        }
+      </div>
+    );
+  }
 
   if (hasKey === null) {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-400">{t('loading')}</div>;
