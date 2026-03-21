@@ -5,6 +5,8 @@ import {
   Connection,
   PublicKey,
   Transaction,
+  TransactionMessage,
+  VersionedTransaction,
 } from '@solana/web3.js';
 import {
   getAssociatedTokenAddressSync,
@@ -84,7 +86,7 @@ export interface TransferSkrParams {
   /** Amount in human-readable SKR (e.g. 17.4) */
   amount: number;
   /** wallet.sendTransaction from @solana/wallet-adapter-react */
-  sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
+  sendTransaction: (tx: Transaction | VersionedTransaction, connection: Connection, options?: any) => Promise<string>;
   /** Optional connection from useConnection(); falls back to default RPC */
   connection?: Connection;
 }
@@ -118,13 +120,14 @@ export interface SplitRecipient {
 export interface TransferSkrSplitParams {
   fromWallet: PublicKey;
   recipients: SplitRecipient[];
-  sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
+  sendTransaction: (tx: Transaction | VersionedTransaction, connection: Connection, options?: any) => Promise<string>;
   connection?: Connection;
 }
 
 /**
  * Build and send a single atomic transaction with multiple SKR transfer instructions.
- * Used for referral splits: e.g. 80% treasury + 20% referrer in one tx.
+ * Uses VersionedTransaction (V0) for better Phantom Android compatibility.
+ * Fresh blockhash is fetched immediately before sending.
  * All transfers succeed or all fail — atomic guarantee by Solana runtime.
  */
 export async function transferSkrSplit({
@@ -135,10 +138,12 @@ export async function transferSkrSplit({
 }: TransferSkrSplitParams): Promise<string> {
   const connection = externalConnection || getConnection();
 
+  console.log('[SKR] Building transaction for', recipients.length, 'recipients from', fromWallet.toBase58());
+
   // Source ATA (must exist — user must hold SKR)
   const sourceAta = getAssociatedTokenAddressSync(SKR_MINT, fromWallet, true);
 
-  const tx = new Transaction();
+  const instructions: any[] = [];
 
   for (const recipient of recipients) {
     if (recipient.amount <= 0) continue;
@@ -153,10 +158,10 @@ export async function transferSkrSplit({
     );
 
     if (createAtaIx) {
-      tx.add(createAtaIx);
+      instructions.push(createAtaIx);
     }
 
-    tx.add(
+    instructions.push(
       createTransferInstruction(
         sourceAta,
         destAta,
@@ -168,13 +173,42 @@ export async function transferSkrSplit({
     );
   }
 
-  tx.feePayer = fromWallet;
+  // Get fresh blockhash RIGHT BEFORE building the transaction
+  // Phantom Android silently drops transactions with stale blockhash
+  console.log('[SKR] Fetching fresh blockhash...');
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  console.log('[SKR] Blockhash:', blockhash.slice(0, 12) + '...', 'blockHeight:', lastValidBlockHeight);
 
-  const signature = await sendTransaction(tx, connection);
+  // Build V0 VersionedTransaction for better Phantom Android compatibility
+  const messageV0 = new TransactionMessage({
+    payerKey: fromWallet,
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message();
+
+  const versionedTx = new VersionedTransaction(messageV0);
+
+  console.log('[SKR] Sending VersionedTransaction (V0) with', instructions.length, 'instructions...');
+
+  let signature: string;
+  try {
+    signature = await sendTransaction(versionedTx, connection, {
+      skipPreflight: false,
+      maxRetries: 3,
+    });
+    console.log('[SKR] Transaction sent! Signature:', signature);
+  } catch (sendErr: any) {
+    console.error('[SKR] sendTransaction FAILED:', sendErr);
+    // Re-throw with a cleaner message
+    const msg = sendErr?.message || 'Transaction failed';
+    if (msg.includes('User rejected') || msg.includes('cancelled') || msg.includes('denied')) {
+      throw new Error('Transaction was cancelled by user');
+    }
+    throw new Error(`Transaction failed: ${msg}`);
+  }
 
   // Confirm with timeout to prevent infinite retry loops
   try {
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     const confirmPromise = connection.confirmTransaction(
       { signature, blockhash, lastValidBlockHeight },
       'confirmed',
@@ -183,13 +217,16 @@ export async function transferSkrSplit({
       setTimeout(() => reject(new Error('Confirmation timeout')), 30000)
     );
     await Promise.race([confirmPromise, timeoutPromise]);
+    console.log('[SKR] Transaction confirmed:', signature);
   } catch (confirmErr: any) {
+    console.warn('[SKR] Confirmation uncertain:', confirmErr?.message);
     // If confirmation times out, check if the tx actually succeeded
     const status = await connection.getSignatureStatus(signature);
     if (status?.value?.confirmationStatus === 'confirmed' || status?.value?.confirmationStatus === 'finalized') {
+      console.log('[SKR] Transaction confirmed via status check:', signature);
       return signature;
     }
-    console.warn('Confirmation uncertain, tx may still land:', signature);
+    console.warn('[SKR] Confirmation uncertain, tx may still land:', signature);
   }
 
   return signature;

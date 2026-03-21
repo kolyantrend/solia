@@ -6,14 +6,14 @@
  * All components should use this instead of useWallet() directly.
  */
 import { useWallet } from '@solana/wallet-adapter-react';
-import { PublicKey, Transaction, Connection } from '@solana/web3.js';
+import { PublicKey, Transaction, VersionedTransaction, Connection } from '@solana/web3.js';
 import { useMemo } from 'react';
 
 export interface UnifiedWallet {
   publicKey: PublicKey | null;
   connected: boolean;
-  /** sendTransaction compatible with @solana/wallet-adapter interface */
-  sendTransaction: (tx: Transaction, connection: Connection) => Promise<string>;
+  /** sendTransaction compatible with @solana/wallet-adapter interface (supports V0) */
+  sendTransaction: (tx: Transaction | VersionedTransaction, connection: Connection, options?: any) => Promise<string>;
 }
 
 const noopSendTransaction = async (): Promise<string> => {
