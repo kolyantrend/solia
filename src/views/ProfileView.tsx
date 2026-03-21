@@ -1,10 +1,15 @@
-import { FC, useState, useEffect } from 'react';
-import { Save, Twitter, Send, Youtube, Users, ChevronLeft, ChevronRight, ImageIcon, Pencil, X, Monitor, Smartphone, Square, Loader2, Link2, Copy, Check, Download, UserPlus, UserMinus, ShoppingBag, History, ExternalLink, BadgeCheck, Shield } from 'lucide-react';
+import { FC, useState, useEffect, useCallback } from 'react';
+import { Save, Twitter, Send, Youtube, Users, ChevronLeft, ChevronRight, ImageIcon, Pencil, X, Monitor, Smartphone, Square, Loader2, Link2, Copy, Check, Download, UserPlus, UserMinus, ShoppingBag, ShoppingCart, History, ExternalLink, BadgeCheck, Shield } from 'lucide-react';
 import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { useI18n } from '../i18n';
 import * as db from '../lib/database';
 import { SolanaAvatar } from '../components/SolanaAvatar';
 import { getTwitterAvatarUrl, fetchTwitterDisplayName, extractTwitterUsername, verifyTwitterBio } from '../lib/utils';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useConnection } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
+import { transferSkrSplit, TREASURY_WALLET } from '../lib/solana';
+import { getPurchaseCostSkr } from '../lib/price';
 
 interface WorkItem {
   id: string;
@@ -13,6 +18,7 @@ interface WorkItem {
   prompt: string;
   category: string;
   aspectRatio?: string;
+  author: string;
 }
 
 const WORKS_PER_PAGE = 6;
@@ -38,9 +44,11 @@ function shortAddr(addr: string) {
 
 type ProfileTab = 'works' | 'purchased' | 'history';
 
-export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: string) => void }> = ({ viewAddress, onViewProfile }) => {
+export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: string) => void; onOpenLegal?: (page: 'terms' | 'privacy') => void }> = ({ viewAddress, onViewProfile, onOpenLegal }) => {
   const { t } = useI18n();
   const { publicKey } = useUnifiedWallet();
+  const { sendTransaction } = useWallet();
+  const { connection } = useConnection();
 
   const walletAddr = publicKey?.toBase58() || '';
   const profileAddr = viewAddress || walletAddr;
@@ -64,6 +72,11 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const [viewingWork, setViewingWork] = useState<WorkItem | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
   const [downloadCopied, setDownloadCopied] = useState(false);
+  const [purchasedByMe, setPurchasedByMe] = useState<Set<string>>(new Set());
+  const [buyingWork, setBuyingWork] = useState<WorkItem | null>(null);
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [buyError, setBuyError] = useState('');
+  const [buyCostSkr, setBuyCostSkr] = useState(43);
   const [showFollowList, setShowFollowList] = useState<'followers' | 'following' | null>(null);
   const [followListProfiles, setFollowListProfiles] = useState<Map<string, db.Profile>>(new Map());
   const [followListStatuses, setFollowListStatuses] = useState<Map<string, boolean>>(new Map());
@@ -136,6 +149,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         prompt: p.prompt,
         category: p.category,
         aspectRatio: p.aspect_ratio,
+        author: p.author,
       })));
       setPurchased(purch.map((p) => ({
         id: p.id,
@@ -144,6 +158,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         prompt: p.prompt,
         category: p.category,
         aspectRatio: p.aspect_ratio,
+        author: p.author,
       })));
       setFollowers(frs);
       setFollowing(fng);
@@ -155,7 +170,16 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         setIsFollowing(fng.includes(profileAddr));
       });
     }
+    // Load which posts the current user has purchased (for protection check)
+    if (walletAddr) {
+      db.getUserPurchasedPostIds(walletAddr).then(setPurchasedByMe);
+    }
   }, [profileAddr, walletAddr]);
+
+  // Load buy cost once
+  useEffect(() => {
+    getPurchaseCostSkr().then(setBuyCostSkr);
+  }, []);
 
   // Load ref code for own profile
   useEffect(() => {
@@ -249,9 +273,82 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     }
   };
 
+  /**
+   * Check if the current wallet user "owns" a work item.
+   * Owner = created it (isOwnProfile + works tab) OR purchased it.
+   */
+  const isWorkOwner = (work: WorkItem): boolean => {
+    if (!walletAddr) return false;
+    if (isOwnProfile) return true;
+    return purchasedByMe.has(work.id);
+  };
+
+  const handleBuy = useCallback(async (work: WorkItem) => {
+    if (!walletAddr || buyLoading) return;
+    setBuyLoading(true);
+    setBuyError('');
+    try {
+      const referrerWallet = await db.getReferrer(walletAddr);
+      const recipients: { wallet: PublicKey; amount: number }[] = [];
+      const isSystemRef = !referrerWallet || referrerWallet === TREASURY_WALLET.toBase58();
+
+      if (!isSystemRef) {
+        const creatorAmount = Math.round(buyCostSkr * 0.80 * 10) / 10;
+        const referrerAmount = Math.round(buyCostSkr * 0.10 * 10) / 10;
+        const treasuryAmount = Math.round(buyCostSkr * 0.10 * 10) / 10;
+        recipients.push({ wallet: new PublicKey(work.author), amount: creatorAmount });
+        recipients.push({ wallet: new PublicKey(referrerWallet!), amount: referrerAmount });
+        recipients.push({ wallet: TREASURY_WALLET, amount: treasuryAmount });
+      } else {
+        const creatorAmount = Math.round(buyCostSkr * 0.80 * 10) / 10;
+        const treasuryAmount = Math.round(buyCostSkr * 0.20 * 10) / 10;
+        recipients.push({ wallet: new PublicKey(work.author), amount: creatorAmount });
+        recipients.push({ wallet: TREASURY_WALLET, amount: treasuryAmount });
+      }
+
+      const sig = await transferSkrSplit({
+        fromWallet: new PublicKey(walletAddr),
+        recipients,
+        sendTransaction,
+        connection,
+      });
+
+      await db.recordTransaction({
+        signature: sig,
+        from_wallet: walletAddr,
+        type: 'purchase',
+        total_amount: buyCostSkr,
+        treasury_amount: isSystemRef ? Math.round(buyCostSkr * 0.20 * 10) / 10 : Math.round(buyCostSkr * 0.10 * 10) / 10,
+        creator_wallet: work.author,
+        creator_amount: Math.round(buyCostSkr * 0.80 * 10) / 10,
+        referrer_wallet: !isSystemRef ? referrerWallet! : undefined,
+        referrer_amount: !isSystemRef ? Math.round(buyCostSkr * 0.10 * 10) / 10 : undefined,
+        post_id: work.id,
+      });
+
+      db.grantBonusLikes(walletAddr, 10);
+      if (!isSystemRef) {
+        db.grantBonusLikes(referrerWallet!, 15);
+      }
+
+      const ok = await db.purchasePost(walletAddr, work.id, sig);
+      if (ok) {
+        setPurchasedByMe(prev => new Set([...prev, work.id]));
+      }
+      setBuyingWork(null);
+    } catch (err: any) {
+      console.error('Purchase failed:', err);
+      setBuyError(err.message || 'Transaction failed');
+    } finally {
+      setBuyLoading(false);
+    }
+  }, [walletAddr, buyLoading, buyCostSkr, sendTransaction, connection]);
+
   const handleDownload = async (work: WorkItem) => {
+    const owner = isWorkOwner(work);
     const fileName = `solia_${work.prompt.slice(0, 20).replace(/\s+/g, '_')}.webp`;
-    const downloadUrl = work.originalUrl || work.imageUrl;
+    // Owner gets original; guests get watermarked public version
+    const downloadUrl = owner ? (work.originalUrl || work.imageUrl) : work.imageUrl;
 
     // In-app browsers (Phantom/Solflare) block downloads — clipboard fallback only
     const isInAppBrowser = 'solana' in window || 'phantom' in window || 'solflare' in window;
@@ -764,8 +861,29 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         </div>
       )}
 
+      {/* Legal Links Footer */}
+      {onOpenLegal && (
+        <div className="flex items-center justify-center gap-4 py-6 mt-4 border-t border-zinc-800/50">
+          <button
+            onClick={() => onOpenLegal('terms')}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Terms of Service
+          </button>
+          <span className="text-zinc-700">·</span>
+          <button
+            onClick={() => onOpenLegal('privacy')}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Privacy Policy
+          </button>
+        </div>
+      )}
+
       {/* Image Viewer Modal */}
-      {viewingWork && (
+      {viewingWork && (() => {
+        const owner = isWorkOwner(viewingWork);
+        return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => { setViewingWork(null); setPromptCopied(false); }}>
           <div className="relative max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Close button */}
@@ -776,12 +894,12 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
               <X size={18} />
             </button>
 
-            {/* Image */}
-            <div className="rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-950 flex-shrink-0">
+            {/* Image — non-owners see watermarked overlay */}
+            <div className={`rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-950 flex-shrink-0${!owner ? ' protected-image-wrapper' : ''}`}>
               <img
                 src={viewingWork.imageUrl}
-                alt={viewingWork.prompt}
-                className="w-full max-h-[60vh] object-contain"
+                alt={owner ? viewingWork.prompt : 'Solia'}
+                className={`w-full max-h-[60vh] object-contain${!owner ? ' protected-image' : ''}`}
                 draggable={false}
                 onContextMenu={(e) => e.preventDefault()}
               />
@@ -789,23 +907,38 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
 
             {/* Prompt + Actions */}
             <div className="mt-3 bg-zinc-900/90 rounded-xl border border-zinc-800 p-4 space-y-3">
-              <p className="text-sm text-zinc-300 leading-relaxed line-clamp-4">
-                <span className="font-semibold text-zinc-100 mr-2">{t('feed.prompt')}</span>
-                {viewingWork.prompt}
-              </p>
+              {owner ? (
+                <p className="text-sm text-zinc-300 leading-relaxed line-clamp-4">
+                  <span className="font-semibold text-zinc-100 mr-2">{t('feed.prompt')}</span>
+                  {viewingWork.prompt}
+                </p>
+              ) : (
+                <p className="text-sm text-zinc-500 italic">
+                  {t('feed.promptHidden')}
+                </p>
+              )}
               <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(viewingWork.prompt);
-                    setPromptCopied(true);
-                    setTimeout(() => setPromptCopied(false), 2000);
-                  }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                    promptCopied ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
-                  }`}
-                >
-                  {promptCopied ? <><Check size={16} /> Copied!</> : <><Copy size={16} /> Copy Prompt</>}
-                </button>
+                {owner ? (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(viewingWork.prompt);
+                      setPromptCopied(true);
+                      setTimeout(() => setPromptCopied(false), 2000);
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      promptCopied ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                    }`}
+                  >
+                    {promptCopied ? <><Check size={16} /> Copied!</> : <><Copy size={16} /> Copy Prompt</>}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setBuyingWork(viewingWork); setBuyError(''); }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors border border-emerald-500/30"
+                  >
+                    <ShoppingCart size={16} /> Buy {buyCostSkr} SKR
+                  </button>
+                )}
                 <button
                   onClick={() => handleDownload(viewingWork)}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
@@ -815,6 +948,37 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                   {downloadCopied ? <><Check size={16} /> Link Copied!</> : <><Download size={16} /> Download</>}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* Buy Confirmation Modal */}
+      {buyingWork && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { if (!buyLoading) { setBuyingWork(null); setBuyError(''); } }}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-xs w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-center">{t('buy.confirmTitle')}</h3>
+            <p className="text-sm text-zinc-400 text-center">{t('buy.priceNote')}</p>
+            <p className="text-xs text-zinc-500 text-center">({buyCostSkr} SKR)</p>
+            {buyError && (
+              <p className="text-xs text-red-400 text-center bg-red-500/10 rounded-lg p-2">{buyError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setBuyingWork(null); setBuyError(''); }}
+                disabled={buyLoading}
+                className="flex-1 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 text-sm font-medium hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                onClick={() => handleBuy(buyingWork)}
+                disabled={buyLoading}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+              >
+                {buyLoading ? <><Loader2 className="animate-spin" size={14} /> Paying...</> : t('buy.confirm')}
+              </button>
             </div>
           </div>
         </div>

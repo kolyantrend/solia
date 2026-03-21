@@ -3,10 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/icon-192x192.png" />
     <title>Solia - AI Content Platform</title>
     <style>
-      /* Safe area insets for Capacitor Android (notch + nav buttons) */
+      /* Safe area insets for PWA standalone mode (notch + nav buttons) */
       :root {
         --sat: env(safe-area-inset-top, 0px);
         --sab: env(safe-area-inset-bottom, 0px);
@@ -19,16 +24,33 @@
         padding-left: var(--sal);
         padding-right: var(--sar);
       }
-      /* Jupiter wallet modal: always on top */
+      /* Jupiter wallet modal + overlays + error notifications: always on top */
       .wallet-adapter-modal-wrapper,
+      .wallet-adapter-modal-overlay,
       [class*="UnifiedWalletModal"],
-      div[data-radix-popper-content-wrapper] {
-        z-index: 9999 !important;
+      [class*="unified-wallet-modal"],
+      [class*="WalletNotification"],
+      [class*="wallet-notification"],
+      [class*="Notification__"],
+      div[data-radix-popper-content-wrapper],
+      div[role="dialog"],
+      div[role="alertdialog"],
+      div[role="alert"],
+      .jup-modal-overlay {
+        z-index: 99999 !important;
       }
     </style>
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Register Service Worker for PWA
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').catch(function() {});
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

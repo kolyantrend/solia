@@ -81,11 +81,24 @@ dialog[role="dialog"] {
   max-width: 100vw !important;
   max-height: 100vh !important;
   border: none !important;
+  z-index: 99999 !important;
 }
 dialog[role="dialog"] > * {
   margin: 0 auto;
   max-width: min(420px, calc(100vw - 32px));
   width: 100%;
+}
+
+/* Jupiter / Wallet Adapter notifications, toasts, error dialogs — always on top */
+[class*="WalletNotification"],
+[class*="wallet-notification"],
+[class*="WalletModal"],
+[class*="wallet-modal"],
+[class*="Notification__"],
+[class*="notification-"],
+[class*="UnifiedWallet"],
+[class*="unified-wallet"] {
+  z-index: 99999 !important;
 }
 
 /* Hide scrollbar utility */

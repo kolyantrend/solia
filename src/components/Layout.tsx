@@ -26,8 +26,6 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
   const [showDisconnectMenu, setShowDisconnectMenu] = useState(false);
 
   const handleConnect = useCallback(() => {
-    // Always use Jupiter's built-in modal — it handles MWA, Wallet Standard,
-    // in-app browsers, and reconnection after redirect correctly.
     setShowModal(true);
   }, [setShowModal]);
 

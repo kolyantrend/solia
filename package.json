@@ -9,20 +9,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "cap:sync": "npx cap sync android",
-    "cap:open": "npx cap open android",
-    "build:android": "vite build && npx cap sync android"
+    "build:android": "echo Use PWABuilder to create APK from https://solia.live"
   },
   "dependencies": {
-    "@capacitor/android": "^8.2.0",
-    "@capacitor/app": "^8.0.1",
-    "@capacitor/browser": "^8.0.2",
-    "@capacitor/cli": "^8.2.0",
-    "@capacitor/core": "^8.2.0",
-    "@capacitor/status-bar": "^8.0.1",
     "@google/genai": "^1.29.0",
     "@jup-ag/wallet-adapter": "^0.2.6",
-    "@solana-mobile/wallet-adapter-mobile": "^2.2.5",
     "@solana/spl-token": "^0.4.14",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-phantom": "^0.9.28",

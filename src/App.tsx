@@ -6,14 +6,13 @@ import { GenerateView } from './views/GenerateView';
 import { LeaderboardView } from './views/LeaderboardView';
 import { ProfileView } from './views/ProfileView';
 import { StatsView } from './views/StatsView';
+import { TermsView } from './views/TermsView';
+import { PrivacyView } from './views/PrivacyView';
 import { Key, ArrowLeft } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n';
 import { ThemeProvider } from './theme';
 import { useUnifiedWallet } from './hooks/useUnifiedWallet';
 import { saveReferral, resolveRefCode, getReferrer } from './lib/database';
-import { isNative } from './lib/platform';
-import { App as CapApp } from '@capacitor/app';
-import { StatusBar, Style } from '@capacitor/status-bar';
 
 declare global {
   interface Window {
@@ -37,25 +36,6 @@ function captureReferral() {
   }
 }
 captureReferral();
-
-// On mobile (Capacitor): configure native UI and listen for deep links
-if (isNative) {
-  // Status bar: don't overlay content, dark theme
-  StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
-  StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
-  StatusBar.setBackgroundColor({ color: '#09090b' }).catch(() => {});
-
-  // Deep links for referrals: https://solia.live/?ref=CODE
-  CapApp.addListener('appUrlOpen', (event) => {
-    try {
-      const url = new URL(event.url);
-      const ref = url.searchParams.get('ref');
-      if (ref) {
-        sessionStorage.setItem(REF_KEY, ref);
-      }
-    } catch { /* ignore malformed URLs */ }
-  });
-}
 
 function AppContent() {
   const { publicKey } = useUnifiedWallet();
@@ -96,6 +76,7 @@ function AppInner() {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [viewingProfile, setViewingProfile] = useState<string | null>(null);
   const [previousTab, setPreviousTab] = useState<string>('feed');
+  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | null>(null);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -137,7 +118,17 @@ function AppInner() {
 
   const handleSetActiveTab = (tab: string) => {
     setViewingProfile(null);
+    setLegalPage(null);
     setActiveTab(tab);
+  };
+
+  const handleOpenLegal = (page: 'terms' | 'privacy') => {
+    setPreviousTab(activeTab);
+    setLegalPage(page);
+  };
+
+  const handleBackFromLegal = () => {
+    setLegalPage(null);
   };
 
   if (hasKey === null) {
@@ -171,7 +162,11 @@ function AppInner() {
 
   return (
     <Layout activeTab={activeTab} setActiveTab={handleSetActiveTab}>
-        {viewingProfile ? (
+        {legalPage ? (
+          legalPage === 'terms'
+            ? <TermsView onBack={handleBackFromLegal} />
+            : <PrivacyView onBack={handleBackFromLegal} />
+        ) : viewingProfile ? (
           <>
             <div className="px-4 pt-3">
               <button
@@ -185,6 +180,7 @@ function AppInner() {
             <ProfileView
               viewAddress={viewingProfile}
               onViewProfile={handleViewProfile}
+              onOpenLegal={handleOpenLegal}
             />
           </>
         ) : (
@@ -193,7 +189,7 @@ function AppInner() {
             {activeTab === 'generate' && <GenerateView onGenerate={handleGenerate} />}
             {activeTab === 'leaderboard' && <LeaderboardView onViewProfile={handleViewProfile} />}
             {activeTab === 'stats' && <StatsView onViewProfile={handleViewProfile} />}
-            {activeTab === 'profile' && <ProfileView onViewProfile={handleViewProfile} />}
+            {activeTab === 'profile' && <ProfileView onViewProfile={handleViewProfile} onOpenLegal={handleOpenLegal} />}
           </>
         )}
       </Layout>

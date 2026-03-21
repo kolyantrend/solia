@@ -1,6 +1,7 @@
 /**
- * Unified wallet hook — thin wrapper around @solana/wallet-adapter-react useWallet.
- * Jupiter Unified Wallet Kit handles all platforms (MWA, Wallet Standard, etc.)
+ * Unified wallet hook — thin wrapper around wallet-adapter.
+ * MWA (Mobile Wallet Adapter) handles Seeker and other native wallets.
+ * Jupiter Unified Wallet Kit handles web wallets.
  * 
  * All components should use this instead of useWallet() directly.
  */
