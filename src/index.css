@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+/*
+ * Solana-style Theme System
+ * Override Tailwind's zinc palette based on data-theme attribute.
+ * Dark = deep purple Solana tones. Light = white/lavender.
+ */
+
+:root,
+[data-theme="dark"] {
+  --color-zinc-950: #0c0a1d;
+  --color-zinc-900: #14102e;
+  --color-zinc-800: #211a45;
+  --color-zinc-700: #312660;
+  --color-zinc-600: #4a3d7a;
+  --color-zinc-500: #6e60a0;
+  --color-zinc-400: #9488b8;
+  --color-zinc-300: #b8aed0;
+  --color-zinc-200: #d6cfe5;
+  --color-zinc-100: #ebe8f3;
+  --color-zinc-50: #f6f4fa;
+}
+
+[data-theme="light"] {
+  --color-zinc-950: #f6f4fa;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #e8e4f0;
+  --color-zinc-700: #d6d0e4;
+  --color-zinc-600: #b0a6c5;
+  --color-zinc-500: #8a80a5;
+  --color-zinc-400: #5c5478;
+  --color-zinc-300: #3a3258;
+  --color-zinc-200: #241c42;
+  --color-zinc-100: #1a1232;
+  --color-zinc-50: #0f0a22;
+}
+
+/* Ticker scroll animation */
+@keyframes scroll-x {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll-x {
+  animation: scroll-x 60s linear infinite;
+}
+
+.animate-scroll-x:hover {
+  animation-play-state: paused;
+}
+
+@keyframes scroll-x-reverse {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-scroll-x-reverse {
+  animation: scroll-x-reverse 45s linear infinite;
+}
+
+.animate-scroll-x-reverse:hover {
+  animation-play-state: paused;
+}
+
+/* Jupiter Wallet Modal — center on mobile */
+dialog[role="dialog"] {
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  margin: auto !important;
+  padding: 0 !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border: none !important;
+  z-index: 99999 !important;
+}
+dialog[role="dialog"] > * {
+  margin: 0 auto;
+  max-width: min(420px, calc(100vw - 32px));
+  width: 100%;
+}
+
+/* Jupiter / Wallet Adapter notifications, toasts, error dialogs — always on top */
+[class*="WalletNotification"],
+[class*="wallet-notification"],
+[class*="WalletModal"],
+[class*="wallet-modal"],
+[class*="Notification__"],
+[class*="notification-"],
+[class*="UnifiedWallet"],
+[class*="unified-wallet"] {
+  z-index: 99999 !important;
+}
+
+/* Hide scrollbar utility */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Image protection — prevent saving/dragging */
+.protected-image {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.protected-image-wrapper {
+  position: relative;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.protected-image-wrapper::before {
+  content: 'SOLIA';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 5rem;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  color: rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+  text-shadow: 0 0 40px rgba(255,255,255,0.02);
+  transform: rotate(-25deg);
+}
+.protected-image-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 80px,
+    rgba(255,255,255,0.008) 80px,
+    rgba(255,255,255,0.008) 81px
+  );
+  pointer-events: none;
+}

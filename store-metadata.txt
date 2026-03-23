@@ -1,0 +1,32 @@
+========================================
+SOLIA — Store Metadata
+========================================
+
+--- Short Description (1-2 sentences) ---
+
+Solia is an AI-powered content creation and monetization platform on Solana. Generate stunning images with AI, publish them to a global feed, and earn crypto when others purchase your creations.
+
+
+--- Full Description ---
+
+Solia transforms your ideas into revenue. Powered by cutting-edge AI image generation and built on the Solana blockchain, Solia lets anyone create professional-quality visuals from simple text prompts — and instantly monetize them.
+
+Key Features:
+
+• AI Image Generation — Turn text prompts into stunning images across 19+ categories including Anime, Cyberpunk, Fantasy, 3D, Photography, and more. Choose from multiple aspect ratios (16:9, 9:16, 1:1, and others).
+
+• Earn From Your Art — Every image you publish to the global feed can be purchased by other users. Creators receive 80% of each sale directly to their Solana wallet, instantly and trustlessly.
+
+• Non-Custodial & Secure — Connect any Solana wallet (Phantom, Solflare, and more). Solia never has access to your private keys. All transactions happen on-chain with full transparency.
+
+• Social Features — Like, comment, follow your favorite creators, and climb the leaderboard. Build your audience and grow your creative reputation.
+
+• Image Protection — All published images are watermarked for protection. Only buyers and creators can access original unwatermarked files and prompts.
+
+• Referral Program — Invite friends and earn 10% of every purchase they make on the platform. Share your unique referral link and watch your earnings grow.
+
+• Built on Solana — Lightning-fast transactions with minimal fees. Payments are processed in SKR tokens on the Solana blockchain.
+
+Solia is the creative economy for the AI generation. Whether you're an artist, a meme creator, or just someone with great ideas — your imagination is now your income.
+
+Website: https://solia.live

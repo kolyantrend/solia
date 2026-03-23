@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "live.solia.twa",
+    "sha256_cert_fingerprints": ["E4:7E:B6:0B:C1:9A:F3:68:71:5D:96:5C:DD:78:85:E2:E9:F9:B4:42:12:6E:04:F1:74:78:D5:81:AE:08:3A:99"]
+  }
+}]
