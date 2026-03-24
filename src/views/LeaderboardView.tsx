@@ -1,9 +1,11 @@
 import { FC, useEffect, useState } from 'react';
-import { Trophy, Medal, Award, Heart, Users, Link2, Loader2, BadgeCheck } from 'lucide-react';
+import { Trophy, Medal, Award, Heart, Users, Link2, Loader2, BadgeCheck, Download } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
+import { TREASURY_WALLET } from '../lib/solana';
 import * as db from '../lib/database';
 import { SolanaAvatar } from '../components/SolanaAvatar';
-import { getTwitterAvatarUrl, getProfileDisplayName, extractTwitterUsername } from '../lib/utils';
+import { getTwitterAvatarUrl, extractTwitterUsername } from '../lib/utils';
 import { BannerCarousel } from '../components/BannerCarousel';
 import { PROMO_BANNERS } from '../config/banners';
 
@@ -19,6 +21,14 @@ interface LeaderboardUser {
 }
 
 type LeaderboardTab = 'generations' | 'likes' | 'creators';
+type TimePeriod = '24h' | '7d' | '30d' | 'all';
+
+const PERIOD_HOURS: Record<TimePeriod, number | undefined> = {
+  '24h': 24,
+  '7d': 7 * 24,
+  '30d': 30 * 24,
+  'all': undefined,
+};
 
 function shortAddr(addr: string) {
   if (addr.length <= 10) return addr;
@@ -27,17 +37,22 @@ function shortAddr(addr: string) {
 
 export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> = ({ onViewProfile }) => {
   const { t } = useI18n();
+  const { publicKey } = useUnifiedWallet();
+  const isAdmin = publicKey?.toBase58() === TREASURY_WALLET.toBase58();
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('generations');
+  const [period, setPeriod] = useState<TimePeriod>('all');
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [topReferrers, setTopReferrers] = useState<{ wallet: string; creator_count: number }[]>([]);
+  const [referrerProfiles, setReferrerProfiles] = useState<Map<string, { twitter: string; display_name: string | null }>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
+    const hours = PERIOD_HOURS[period];
     Promise.all([
-      db.getLeaderboard(),
-      db.getTopReferrersCreators(),
-    ]).then(([data, refs]) => {
+      db.getLeaderboard(hours),
+      db.getTopReferrersCreators(hours),
+    ]).then(async ([data, refs]) => {
       setLeaderboard(data.map((u, i) => ({
         rank: i + 1,
         address: u.wallet,
@@ -49,16 +64,60 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
         display_name: u.display_name,
       })));
       setTopReferrers(refs);
+
+      // Fetch profiles for referrers
+      if (refs.length > 0) {
+        try {
+          const profiles = await db.getProfilesBatch(refs.map(r => r.wallet));
+          const map = new Map<string, { twitter: string; display_name: string | null }>();
+          profiles.forEach((p, wallet) => {
+            map.set(wallet, { twitter: p.twitter || '', display_name: p.display_name || null });
+          });
+          setReferrerProfiles(map);
+        } catch {}
+      }
+
       setLoading(false);
     });
-  }, []);
+  }, [period]);
+
+  const treasuryAddr = TREASURY_WALLET.toBase58();
+  const filteredReferrers = topReferrers.filter(r => r.wallet !== treasuryAddr);
 
   const sortedLeaderboard = [...leaderboard]
+    .filter(u => u.address !== treasuryAddr)
     .sort((a, b) => {
       if (activeTab === 'generations') return b.generations - a.generations;
       return b.totalLikes - a.totalLikes;
     })
     .map((user, idx) => ({ ...user, rank: idx + 1 }));
+
+  const handleExport = () => {
+    let csv = 'Rank,Wallet,Twitter,Display Name,Generations,Likes\n';
+    if (activeTab === 'creators') {
+      csv = 'Rank,Wallet,Twitter,Display Name,Creators Invited\n';
+      filteredReferrers.forEach((ref, idx) => {
+        const prof = referrerProfiles.get(ref.wallet);
+        const tw = prof?.twitter ? extractTwitterUsername(prof.twitter) || prof.twitter : '';
+        const name = prof?.display_name || '';
+        csv += `${idx + 1},${ref.wallet},${tw},${name},${ref.creator_count}\n`;
+      });
+    } else {
+      sortedLeaderboard.forEach((user) => {
+        const tw = user.twitter ? extractTwitterUsername(user.twitter) || user.twitter : '';
+        const name = user.display_name || '';
+        csv += `${user.rank},${user.address},${tw},${name},${user.generations},${user.totalLikes}\n`;
+      });
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `solia_top_${activeTab}_${period}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4 pb-24 max-w-md mx-auto w-full">
@@ -108,6 +167,35 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
         </button>
       </div>
 
+      {/* Time Period Filter + Export */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1">
+          {(['24h', '7d', '30d', 'all'] as TimePeriod[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-medium transition-colors ${
+                period === p
+                  ? 'bg-zinc-700 text-white'
+                  : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
+              }`}
+            >
+              {p === 'all' ? 'All' : p.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        {isAdmin && (
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 text-[11px] sm:text-xs font-medium transition-colors"
+            title="Export CSV"
+          >
+            <Download size={12} />
+            CSV
+          </button>
+        )}
+      </div>
+
       {activeTab === 'creators' ? (
         /* Creators referral leaderboard */
         <div className="bg-zinc-900/50 rounded-3xl border border-zinc-800/50 backdrop-blur-sm overflow-hidden">
@@ -118,30 +206,38 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
           <div className="divide-y divide-zinc-800/50">
             {loading ? (
               <div className="flex justify-center py-8"><Loader2 className="animate-spin text-zinc-500" size={24} /></div>
-            ) : topReferrers.length === 0 ? (
+            ) : filteredReferrers.length === 0 ? (
               <div className="text-center py-8 text-zinc-500 text-sm">No referrers yet</div>
-            ) : topReferrers.map((ref, idx) => (
-              <div key={ref.wallet} className="flex items-center justify-between p-4 hover:bg-zinc-800/30 transition-colors cursor-pointer" onClick={() => onViewProfile?.(ref.wallet)}>
-                <div className="flex items-center gap-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
-                    idx === 0 ? 'bg-amber-500 text-amber-950 shadow-lg shadow-amber-500/20' :
-                    idx === 1 ? 'bg-zinc-300 text-zinc-800 shadow-lg shadow-zinc-300/20' :
-                    idx === 2 ? 'bg-amber-700 text-amber-100 shadow-lg shadow-amber-700/20' :
-                    'bg-zinc-800 text-zinc-400'
-                  }`}>
-                    {idx === 0 ? <Trophy size={16} /> :
-                     idx === 1 ? <Medal size={16} /> :
-                     idx === 2 ? <Award size={16} /> :
-                     idx + 1}
+            ) : filteredReferrers.map((ref, idx) => {
+              const prof = referrerProfiles.get(ref.wallet);
+              const xAvatar = prof?.twitter ? getTwitterAvatarUrl(prof.twitter) : null;
+              return (
+                <div key={ref.wallet} className="flex items-center justify-between p-4 hover:bg-zinc-800/30 transition-colors cursor-pointer" onClick={() => onViewProfile?.(ref.wallet)}>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
+                      idx === 0 ? 'bg-amber-500 text-amber-950 shadow-lg shadow-amber-500/20' :
+                      idx === 1 ? 'bg-zinc-300 text-zinc-800 shadow-lg shadow-zinc-300/20' :
+                      idx === 2 ? 'bg-amber-700 text-amber-100 shadow-lg shadow-amber-700/20' :
+                      'bg-zinc-800 text-zinc-400'
+                    }`}>
+                      {idx === 0 ? <Trophy size={16} /> :
+                       idx === 1 ? <Medal size={16} /> :
+                       idx === 2 ? <Award size={16} /> :
+                       idx + 1}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {xAvatar ? (
+                        <img src={xAvatar} alt="" className="w-6 h-6 rounded-full object-cover border border-zinc-700" referrerPolicy="no-referrer" />
+                      ) : (
+                        <SolanaAvatar size={24} />
+                      )}
+                      <span className="font-mono text-sm text-zinc-200">{prof?.display_name || (prof?.twitter ? extractTwitterUsername(prof.twitter) : shortAddr(ref.wallet))}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <SolanaAvatar size={24} />
-                    <span className="font-mono text-sm text-zinc-200">{shortAddr(ref.wallet)}</span>
-                  </div>
+                  <span className="font-bold text-emerald-400">{ref.creator_count}</span>
                 </div>
-                <span className="font-bold text-emerald-400">{ref.creator_count}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -153,7 +249,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
               {activeTab === 'generations' ? t('lb.generations') : t('lb.likes')}
             </span>
           </div>
-          
+
           <div className="divide-y divide-zinc-800/50">
             {loading ? (
               <div className="flex justify-center py-8"><Loader2 className="animate-spin text-zinc-500" size={24} /></div>
@@ -168,9 +264,9 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
                     user.rank === 3 ? 'bg-amber-700 text-amber-100 shadow-lg shadow-amber-700/20' :
                     'bg-zinc-800 text-zinc-400'
                   }`}>
-                    {user.rank === 1 ? <Trophy size={16} /> : 
-                     user.rank === 2 ? <Medal size={16} /> : 
-                     user.rank === 3 ? <Award size={16} /> : 
+                    {user.rank === 1 ? <Trophy size={16} /> :
+                     user.rank === 2 ? <Medal size={16} /> :
+                     user.rank === 3 ? <Award size={16} /> :
                      user.rank}
                   </div>
                   <div className="flex items-center gap-2">
@@ -194,7 +290,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
                 </div>
                 <div className="flex flex-col items-end shrink-0">
                   <span className={`font-bold ${activeTab === 'generations' ? 'text-indigo-400' : 'text-pink-400'}`}>
-                    {activeTab === 'generations' 
+                    {activeTab === 'generations'
                       ? user.generations.toLocaleString()
                       : user.totalLikes.toLocaleString()
                     }

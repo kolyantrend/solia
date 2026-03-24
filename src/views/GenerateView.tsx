@@ -1,7 +1,7 @@
 import React, { FC, useState, useEffect } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
-import { Loader2, Sparkles, Image as ImageIcon, CheckCircle2, Settings2, Upload, X } from 'lucide-react';
+import { Loader2, Sparkles, Image as ImageIcon, CheckCircle2, Settings2, Upload, X, HelpCircle } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { useI18n } from '../i18n';
 import * as db from '../lib/database';
@@ -19,6 +19,9 @@ const CATEGORIES = [
 ];
 
 const ASPECT_RATIOS = ['16:9', '9:16', '1:1'];
+const MAX_PROMPT_LENGTH = 1000;
+const MAX_FILE_SIZE_MB = 10;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const RESOLUTIONS = ['1K'];
 
 interface ImageFileData {
@@ -37,6 +40,11 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
   const [imageFile1, setImageFile1] = useState<ImageFileData | null>(null);
   const [imageFile2, setImageFile2] = useState<ImageFileData | null>(null);
   
+  const [showHelp, setShowHelp] = useState(false);
+  const isAdmin = publicKey?.toBase58() === TREASURY_WALLET.toBase58();
+  const [grantWallet, setGrantWallet] = useState('');
+  const [grantCount, setGrantCount] = useState(1);
+  const [grantMsg, setGrantMsg] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -65,6 +73,20 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
   const handleFileChange = (setter: (f: ImageFileData | null) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate file type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Only JPEG, PNG and WebP files are allowed');
+      e.target.value = '';
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      setError(`File too large — max ${MAX_FILE_SIZE_MB}MB`);
+      e.target.value = '';
+      return;
+    }
 
     // Compress image via canvas to avoid Gemini API size limits
     const img = new Image();
@@ -105,7 +127,10 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     setIsGenerating(true);
     setError(null);
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY });
+    // Rotate between available API keys for load balancing
+    const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(Boolean) as string[];
+    const apiKey = keys[Math.floor(Math.random() * keys.length)];
+    const ai = new GoogleGenAI({ apiKey });
 
     // Retry up to 3 times on 503 / UNAVAILABLE
     let lastErr: any = null;
@@ -228,6 +253,17 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
       // Skip payment if already paid (retry after failed generation)
       // Check localStorage directly — React state may be stale in async context
       const alreadyPaid = paidKey ? localStorage.getItem(paidKey) === '1' : false;
+
+      // Check for free generation credits (admin-granted)
+      if (!alreadyPaid) {
+        const hasFreeCredit = await db.consumeFreeGeneration(publicKey.toBase58());
+        if (hasFreeCredit) {
+          markPaid(true);
+          await runGeneration();
+          return;
+        }
+      }
+
       if (!alreadyPaid) {
         setIsPaying(true);
 
@@ -290,8 +326,19 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           msg = 'AI model is busy — please try again in a moment';
         } else if (raw.includes('Failed to fetch') || raw.includes('NetworkError')) {
           msg = 'Network error — check your connection and try again';
-        } else if (raw.includes('SAFETY') || raw.includes('blocked')) {
-          msg = 'Content blocked by safety filter — try a different prompt';
+        } else if (raw.includes('SAFETY') || raw.includes('blocked') || raw.includes('safety')) {
+          msg = 'Content blocked by safety filter — try a different photo or prompt';
+        } else if (raw.includes('PERMISSION_DENIED') || raw.includes('403')) {
+          msg = 'API access denied — please contact support';
+        } else if (raw.includes('RESOURCE_EXHAUSTED') || raw.includes('429') || raw.includes('quota')) {
+          msg = 'Generation limit reached — please try again later';
+        } else if (raw.includes('INVALID_ARGUMENT') || raw.includes('400')) {
+          msg = 'Invalid request — try a different prompt or photo';
+        } else if (raw.includes('DEADLINE_EXCEEDED') || raw.includes('timeout') || raw.includes('Timeout')) {
+          msg = 'Request timed out — please try again';
+        } else if (raw.startsWith('{') || raw.startsWith('[')) {
+          // Catch any remaining raw JSON errors
+          msg = 'Generation failed — please try again';
         }
         const wasPaid = paidKey ? localStorage.getItem(paidKey) === '1' : false;
         if (wasPaid) {
@@ -325,7 +372,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
         </div>
       ) : (
         <label className="flex flex-col items-center justify-center w-full h-20 sm:h-24 border-2 border-dashed border-zinc-800 rounded-2xl hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-colors cursor-pointer">
-          <input type="file" accept="image/*" className="hidden" onChange={handleFileChange(setFile)} />
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileChange(setFile)} />
           <Upload size={18} className="text-zinc-500 mb-1" />
           <span className="text-[10px] sm:text-xs text-zinc-500 font-medium">{t('gen.upload')}</span>
         </label>
@@ -338,21 +385,56 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
       <BannerCarousel banners={PROMO_BANNERS} />
 
       <div className="text-center space-y-1">
-        <h2 className="text-2xl font-bold tracking-tight">{t('gen.title')}</h2>
+        <div className="flex items-center justify-center gap-2">
+          <h2 className="text-2xl font-bold tracking-tight">{t('gen.title')}</h2>
+          <button
+            onClick={() => setShowHelp(true)}
+            className="text-zinc-500 hover:text-indigo-400 transition-colors"
+            title={t('gen.helpTitle')}
+          >
+            <HelpCircle size={20} />
+          </button>
+        </div>
         <p className="text-zinc-400 text-sm">
           {t('gen.desc')}
         </p>
       </div>
+
+      {showHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-sm w-full max-h-[80vh] overflow-y-auto p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">{t('gen.helpTitle')}</h3>
+              <button onClick={() => setShowHelp(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="text-sm text-zinc-300 whitespace-pre-line leading-relaxed">{t('gen.helpSteps')}</div>
+            <div>
+              <h4 className="text-sm font-semibold text-indigo-400 mb-1">{t('gen.helpTips')}</h4>
+              <div className="text-sm text-zinc-400 whitespace-pre-line leading-relaxed">{t('gen.helpTipsList')}</div>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-red-400 mb-1">{t('gen.helpErrors')}</h4>
+              <div className="text-sm text-zinc-400 whitespace-pre-line leading-relaxed">{t('gen.helpErrorList')}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-zinc-900/50 p-3 sm:p-4 rounded-3xl border border-zinc-800/50 backdrop-blur-sm space-y-3 sm:space-y-4">
         <div className="space-y-1.5">
           <label className="text-xs sm:text-sm font-medium text-zinc-300 ml-1">{t('gen.prompt')}</label>
           <textarea
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => { if (e.target.value.length <= MAX_PROMPT_LENGTH) setPrompt(e.target.value); }}
+            maxLength={MAX_PROMPT_LENGTH}
             placeholder={t('gen.placeholder')}
             className="w-full h-24 sm:h-32 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 sm:p-4 text-sm sm:text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none transition-all"
           />
+          <div className={`text-right text-[10px] mr-1 ${prompt.length > MAX_PROMPT_LENGTH * 0.9 ? 'text-amber-400' : 'text-zinc-600'}`}>
+            {prompt.length}/{MAX_PROMPT_LENGTH}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -474,6 +556,41 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           >
             {t('gen.createMore')}
           </button>
+        </div>
+      )}
+
+      {/* Admin: Grant free generations */}
+      {isAdmin && (
+        <div className="bg-zinc-900/50 p-4 rounded-2xl border border-amber-800/50 space-y-3">
+          <h3 className="text-sm font-bold text-amber-400">Admin: Grant Free Generations</h3>
+          <input
+            value={grantWallet}
+            onChange={(e) => setGrantWallet(e.target.value)}
+            placeholder="User wallet address"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+          />
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={grantCount}
+              onChange={(e) => setGrantCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+              className="w-20 bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            />
+            <button
+              onClick={async () => {
+                if (!grantWallet.trim()) { setGrantMsg('Enter wallet address'); return; }
+                setGrantMsg('Granting...');
+                const ok = await db.grantFreeGenerations(grantWallet.trim(), grantCount);
+                setGrantMsg(ok ? `Granted ${grantCount} free generation(s) to ${grantWallet.slice(0, 8)}...` : 'Failed to grant');
+              }}
+              className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm transition-colors"
+            >
+              Grant
+            </button>
+          </div>
+          {grantMsg && <p className="text-xs text-amber-300">{grantMsg}</p>}
         </div>
       )}
     </div>

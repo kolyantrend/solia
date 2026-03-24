@@ -14,17 +14,17 @@ export const PROMO_BANNERS: BannerConfig[] = [
   {
     id: 101,
     imageUrl: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/SoliaX.jpg',
-    linkUrl: 'https://x.com/ai_solia',
+    linkUrl: 'https://x.com/SoliaLive',
   },
   {
     id: 102,
     imageUrl: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/soliaX3.png',
-    linkUrl: 'https://x.com/ai_solia',
+    linkUrl: 'https://x.com/SoliaLive',
   },
   {
     id: 103,
     imageUrl: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/SloiaX%20Car.png',
-    linkUrl: 'https://x.com/ai_solia',
+    linkUrl: 'https://x.com/SoliaLive',
   },
 ];
 

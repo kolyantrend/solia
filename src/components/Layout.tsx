@@ -72,7 +72,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =
           </button>
           {/* X / Twitter link */}
           <a
-            href="https://x.com/ai_solia"
+            href="https://x.com/SoliaLive"
             target="_blank"
             rel="noreferrer"
             className="p-1 sm:p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"

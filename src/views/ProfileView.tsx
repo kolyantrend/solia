@@ -25,6 +25,7 @@ interface WorkItem {
   category: string;
   aspectRatio?: string;
   author: string;
+  createdAt?: string;
 }
 
 const WORKS_PER_PAGE = 6;
@@ -157,6 +158,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         category: p.category,
         aspectRatio: p.aspect_ratio,
         author: p.author,
+        createdAt: p.created_at,
       })));
       setPurchased(purch.map((p) => ({
         id: p.id,
@@ -166,6 +168,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         category: p.category,
         aspectRatio: p.aspect_ratio,
         author: p.author,
+        createdAt: p.created_at,
       })));
       setFollowers(frs);
       setFollowing(fng);
@@ -488,8 +491,17 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
               {verified && <BadgeCheck size={18} className="text-blue-400 shrink-0" />}
             </div>
           )}
-          <p className="text-sm text-zinc-400 font-mono">
+          <p className="text-sm text-zinc-400 font-mono inline-flex items-center gap-1.5 justify-center">
             {shortAddr(profileAddr) || t('prof.walletNotConnected')}
+            {walletAddr === TREASURY_WALLET.toBase58() && profileAddr && (
+              <button
+                onClick={() => { navigator.clipboard.writeText(profileAddr); }}
+                className="text-amber-500 hover:text-amber-300 transition-colors"
+                title="Copy wallet address"
+              >
+                <Copy size={14} />
+              </button>
+            )}
           </p>
           {/* Verify button (own profile, has twitter, not yet verified) */}
           {isOwnProfile && twitter && !verified && (
@@ -619,6 +631,11 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                       onClick={() => setViewingWork(work)}
                     >
                       <img src={work.imageUrl} alt={work.prompt} className="protected-image w-full h-full object-cover" draggable={false} />
+                      {work.createdAt && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-zinc-300 text-center py-0.5 leading-tight">
+                          {new Date(work.createdAt).toLocaleDateString()} {new Date(work.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
                         <ImageIcon size={24} className="text-white/80" />
                       </div>
@@ -648,6 +665,11 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                     onClick={() => setViewingWork(work)}
                   >
                     <img src={work.imageUrl} alt={work.prompt} className="w-full h-full object-cover" />
+                    {work.createdAt && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] text-zinc-300 text-center py-0.5 leading-tight">
+                        {new Date(work.createdAt).toLocaleDateString()} {new Date(work.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
                       <ImageIcon size={24} className="text-white/80" />
                     </div>

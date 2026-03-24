@@ -1,6 +1,7 @@
 import { FC, useState, useEffect } from 'react';
 import { BadgeCheck } from 'lucide-react';
 import { getTopGenerators12h } from '../lib/database';
+import { TREASURY_WALLET } from '../lib/solana';
 import { SolanaAvatar } from './SolanaAvatar';
 import { getTwitterAvatarUrl, extractTwitterUsername } from '../lib/utils';
 
@@ -19,7 +20,7 @@ function shortAddr(addr: string) {
 }
 
 // Placeholder entries shown when no real creators exist yet
-const PLACEHOLDERS: TopCreator[] = Array.from({ length: 8 }, (_, i) => ({
+const PLACEHOLDERS: TopCreator[] = Array.from({ length: 6 }, (_, i) => ({
   wallet: `Creator${i + 1}...`,
   count: 0,
   avatar_url: null,
@@ -32,16 +33,16 @@ export const TopCreatorsTicker: FC<{ onViewProfile?: (address: string) => void }
   const [creators, setCreators] = useState<TopCreator[]>([]);
 
   useEffect(() => {
-    getTopGenerators12h().then(setCreators).catch(() => {});
-    const interval = setInterval(() => {
-      getTopGenerators12h().then(setCreators).catch(() => {});
-    }, 120000);
+    const treasuryAddr = TREASURY_WALLET.toBase58();
+    const fetch = () => getTopGenerators12h().then(data => setCreators(data.filter(c => c.wallet !== treasuryAddr))).catch(() => {});
+    fetch();
+    const interval = setInterval(fetch, 120000);
     return () => clearInterval(interval);
   }, []);
 
-  // Pad real creators with placeholders to fill at least 8 slots (no duplicates of real users)
+  // Pad real creators with placeholders to fill at least 6 slots
   const items: TopCreator[] = creators.length > 0
-    ? [...creators, ...PLACEHOLDERS.slice(0, Math.max(0, 8 - creators.length))]
+    ? [...creators, ...PLACEHOLDERS.slice(0, Math.max(0, 6 - creators.length))]
     : PLACEHOLDERS;
 
   // Double items for seamless loop

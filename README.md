@@ -6,7 +6,7 @@
 
 A decentralized social platform for AI creators to monetize their content on the Solana blockchain. Create, share, and sell AI-generated images with SKR tokens. Built with React, Vite, and Supabase.
 
-[![Twitter](https://img.shields.io/badge/Twitter-@ai__solia-1DA1F2?style=flat&logo=twitter)](https://x.com/ai_solia)
+[![Twitter](https://img.shields.io/badge/Twitter-@SoliaLive-1DA1F2?style=flat&logo=twitter)](https://x.com/SoliaLive)
 [![Solana](https://img.shields.io/badge/Solana-Mainnet-9945FF?style=flat&logo=solana)](https://solana.com)
 
 ## 🌟 Features
@@ -235,7 +235,7 @@ This software is the exclusive property of the Solia team. Unauthorized copying,
 
 ## 🔗 Links
 
-- [Twitter](https://x.com/ai_solia)
+- [Twitter](https://x.com/SoliaLive)
 - [Solana Explorer](https://solscan.io/token/SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3)
 
 ## 💡 Roadmap

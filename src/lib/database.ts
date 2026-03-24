@@ -171,6 +171,55 @@ export function markGenerationUsed(wallet: string) {
 }
 
 // ========================
+// FREE GENERATION CREDITS (admin-granted)
+// ========================
+
+export async function getFreeGenerations(wallet: string): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+  try {
+    const { data } = await supabase
+      .from('free_generations')
+      .select('credits')
+      .eq('wallet', wallet)
+      .single();
+    return data?.credits || 0;
+  } catch { return 0; }
+}
+
+export async function grantFreeGenerations(wallet: string, count: number): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const current = await getFreeGenerations(wallet);
+    if (current > 0) {
+      const { error } = await supabase
+        .from('free_generations')
+        .update({ credits: current + count })
+        .eq('wallet', wallet);
+      return !error;
+    } else {
+      const { error } = await supabase
+        .from('free_generations')
+        .insert({ wallet, credits: count });
+      return !error;
+    }
+  } catch { return false; }
+}
+
+export async function consumeFreeGeneration(wallet: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const current = await getFreeGenerations(wallet);
+    if (current <= 0) return false;
+    if (current === 1) {
+      await supabase.from('free_generations').delete().eq('wallet', wallet);
+    } else {
+      await supabase.from('free_generations').update({ credits: current - 1 }).eq('wallet', wallet);
+    }
+    return true;
+  } catch { return false; }
+}
+
+// ========================
 // POSTS
 // ========================
 
@@ -589,12 +638,15 @@ export async function unfollowUser(follower: string, following: string): Promise
 // LEADERBOARD
 // ========================
 
-export async function getLeaderboard(): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]> {
+export async function getLeaderboard(periodHours?: number): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const { data } = await supabase
-      .from('posts')
-      .select('author, likes_count');
+    let query = supabase.from('posts').select('author, likes_count');
+    if (periodHours) {
+      const since = new Date(Date.now() - periodHours * 3_600_000).toISOString();
+      query = query.gte('created_at', since);
+    }
+    const { data } = await query;
 
     if (!data) return [];
 
@@ -640,11 +692,19 @@ export async function getLeaderboard(): Promise<{ wallet: string; generations: n
 export async function getTopGenerators12h(): Promise<{ wallet: string; count: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase
+    // Try 24h first, fallback to all-time if too few results
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    let { data } = await supabase
       .from('posts')
       .select('author')
-      .gte('created_at', twelveHoursAgo);
+      .gte('created_at', since24h);
+
+    // Fallback to all-time if fewer than 3 creators in 24h
+    const uniqueAuthors24h = new Set((data || []).map(p => p.author));
+    if (uniqueAuthors24h.size < 3) {
+      const fallback = await supabase.from('posts').select('author');
+      data = fallback.data;
+    }
 
     if (!data || data.length === 0) return [];
 
@@ -805,12 +865,15 @@ export async function getReferrals(
   } catch { return { items: [], total: 0, totalAll: 0, totalUsers: 0, totalCreators: 0 }; }
 }
 
-export async function getTopReferrersCreators(): Promise<{ wallet: string; creator_count: number }[]> {
+export async function getTopReferrersCreators(periodHours?: number): Promise<{ wallet: string; creator_count: number }[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const { data: refs } = await supabase
-      .from('referrals')
-      .select('referrer_wallet, referred_wallet');
+    let query = supabase.from('referrals').select('referrer_wallet, referred_wallet');
+    if (periodHours) {
+      const since = new Date(Date.now() - periodHours * 3_600_000).toISOString();
+      query = query.gte('created_at', since);
+    }
+    const { data: refs } = await query;
 
     if (!refs || refs.length === 0) return [];
 
