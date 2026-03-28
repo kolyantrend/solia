@@ -1,6 +1,6 @@
 ![Solia Banner](https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Git2.png)
 
-# Solia - AI Content Monetization Platform on Solana
+# Solia - AI Content Monetization Platform on Solana!
 
 > **⚠️ PRIVATE REPOSITORY** - This is proprietary software. Do not share, fork, or redistribute without authorization.
 
