@@ -641,17 +641,27 @@ export async function unfollowUser(follower: string, following: string): Promise
 export async function getLeaderboard(periodHours?: number): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    let query = supabase.from('posts').select('author, likes_count');
-    if (periodHours) {
-      const since = new Date(Date.now() - periodHours * 3_600_000).toISOString();
-      query = query.gte('created_at', since);
+    // Fetch all posts (paginated to avoid Supabase 1000-row default limit)
+    let allPosts: { author: string; likes_count: number }[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      let query = supabase.from('posts').select('author, likes_count');
+      if (periodHours) {
+        const since = new Date(Date.now() - periodHours * 3_600_000).toISOString();
+        query = query.gte('created_at', since);
+      }
+      const { data } = await query.range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      allPosts = allPosts.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
     }
-    const { data } = await query;
 
-    if (!data) return [];
+    if (allPosts.length === 0) return [];
 
     const map = new Map<string, { generations: number; total_likes: number }>();
-    for (const p of data) {
+    for (const p of allPosts) {
       const existing = map.get(p.author) || { generations: 0, total_likes: 0 };
       existing.generations += 1;
       existing.total_likes += p.likes_count || 0;
@@ -661,7 +671,7 @@ export async function getLeaderboard(periodHours?: number): Promise<{ wallet: st
     const top = Array.from(map.entries())
       .map(([wallet, stats]) => ({ wallet, ...stats }))
       .sort((a, b) => b.generations - a.generations)
-      .slice(0, 20);
+      .slice(0, 50);
 
     // Fetch avatars for leaderboard users
     const wallets = top.map((t) => t.wallet);
@@ -694,29 +704,42 @@ export async function getTopGenerators12h(): Promise<{ wallet: string; count: nu
   try {
     // Try 24h first, fallback to all-time if too few results
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    let { data } = await supabase
-      .from('posts')
-      .select('author')
-      .gte('created_at', since24h);
-
-    // Fallback to all-time if fewer than 3 creators in 24h
-    const uniqueAuthors24h = new Set((data || []).map(p => p.author));
-    if (uniqueAuthors24h.size < 3) {
-      const fallback = await supabase.from('posts').select('author');
-      data = fallback.data;
+    let allData: { author: string }[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data } = await supabase.from('posts').select('author').gte('created_at', since24h).range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
     }
 
-    if (!data || data.length === 0) return [];
+    // Fallback to all-time if fewer than 3 creators in 24h
+    const uniqueAuthors24h = new Set(allData.map(p => p.author));
+    if (uniqueAuthors24h.size < 3) {
+      allData = [];
+      from = 0;
+      while (true) {
+        const { data } = await supabase.from('posts').select('author').range(from, from + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allData = allData.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+    }
+
+    if (allData.length === 0) return [];
 
     const map = new Map<string, number>();
-    for (const p of data) {
+    for (const p of allData) {
       map.set(p.author, (map.get(p.author) || 0) + 1);
     }
 
     const top = Array.from(map.entries())
       .map(([wallet, count]) => ({ wallet, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      .slice(0, 20);
 
     // Fetch avatars for top creators
     const wallets = top.map((t) => t.wallet);
