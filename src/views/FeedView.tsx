@@ -732,7 +732,7 @@ const PostCard: FC<{
               </button>
             </div>
             {/* Preview */}
-            <div className="rounded-xl overflow-hidden border border-zinc-800">
+            <div className="rounded-xl overflow-hidden border border-zinc-800 mx-2 my-1">
               <img src={post.imageUrl} alt="" className="w-full max-h-44 object-cover" referrerPolicy="no-referrer" />
             </div>
             {/* Actions */}
