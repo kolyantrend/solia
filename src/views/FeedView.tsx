@@ -337,19 +337,6 @@ const PostCard: FC<{
 }> = ({ post, onViewProfile, isLiked: initialLiked, isPurchased: initialPurchased, wallet, authorProfile, sharedBuyCost = 43, sharedRemaining = 0, onRemainingChange }) => {
   const { t } = useI18n();
   const { sendTransaction, signTransaction } = useWallet();
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [isCentered, setIsCentered] = useState(false);
-
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsCentered(entry.intersectionRatio > 0.6),
-      { threshold: [0, 0.6, 1] }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
   const { connection } = useConnection();
 
   const [liked, setLiked] = useState(initialLiked);
@@ -582,13 +569,7 @@ const PostCard: FC<{
   };
 
   return (
-    <div
-      ref={cardRef}
-      className={`rounded-3xl overflow-hidden shadow-xl backdrop-blur-sm transition-all duration-500 ${
-        isCentered ? 'rainbow-border' : 'border border-zinc-800/50'
-      }`}
-      style={{ background: 'rgb(24 24 27 / 0.5)' }}
-    >
+    <div className="rainbow-border rounded-3xl overflow-hidden shadow-xl backdrop-blur-sm bg-zinc-900/50">
       <div className="p-3 sm:p-4 flex items-center justify-between gap-2">
         <button
           onClick={() => onViewProfile?.(post.author)}
