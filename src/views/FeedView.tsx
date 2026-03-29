@@ -723,47 +723,30 @@ const PostCard: FC<{
 
       {/* Share Menu Modal */}
       {showShareMenu && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6" onClick={() => setShowShareMenu(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xs w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowShareMenu(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-[280px] p-3 space-y-2" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white">Share</h3>
-              <button onClick={() => setShowShareMenu(false)} className="text-zinc-500 hover:text-white transition-colors p-1">
-                <X size={20} />
+              <h3 className="text-sm font-bold text-white">Share</h3>
+              <button onClick={() => setShowShareMenu(false)} className="text-zinc-500 hover:text-white transition-colors p-0.5">
+                <X size={18} />
               </button>
             </div>
-            {/* Preview */}
-            <div className="rounded-xl overflow-hidden border border-zinc-800">
-              <img src={post.imageUrl} alt="" className="w-full max-h-36 object-cover" referrerPolicy="no-referrer" />
+            <div className="rounded-lg overflow-hidden border border-zinc-800">
+              <img src={post.imageUrl} alt="" className="w-full h-28 object-cover" referrerPolicy="no-referrer" />
             </div>
-            {/* Actions */}
-            <div className="space-y-2">
-              <button
-                onClick={handleDownload}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
-              >
-                <Download size={18} className="text-indigo-400 shrink-0" />
-                <span className="text-sm text-zinc-200 font-medium">Download</span>
-              </button>
-              <button
-                onClick={handleCopyRefLink}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
-              >
-                {copiedRef ? <Check size={18} className="text-emerald-400 shrink-0" /> : <Copy size={18} className="text-indigo-400 shrink-0" />}
-                <span className="text-sm text-zinc-200 font-medium">{copiedRef ? 'Copied!' : 'Copy referral link'}</span>
-              </button>
-              <button
-                onClick={handleShareToX}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-indigo-400 shrink-0"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                <span className="text-sm text-zinc-200 font-medium">Share to X</span>
-              </button>
-            </div>
-            {/* Close button */}
-            <button
-              onClick={() => setShowShareMenu(false)}
-              className="w-full py-2.5 rounded-xl bg-zinc-800/50 text-zinc-400 text-sm font-medium hover:bg-zinc-700 transition-colors"
-            >
+            <button onClick={handleDownload} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors">
+              <Download size={16} className="text-indigo-400 shrink-0" />
+              <span className="text-xs text-zinc-200 font-medium">Download</span>
+            </button>
+            <button onClick={handleCopyRefLink} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors">
+              {copiedRef ? <Check size={16} className="text-emerald-400 shrink-0" /> : <Copy size={16} className="text-indigo-400 shrink-0" />}
+              <span className="text-xs text-zinc-200 font-medium">{copiedRef ? 'Copied!' : 'Copy referral link'}</span>
+            </button>
+            <button onClick={handleShareToX} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-indigo-400 shrink-0"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              <span className="text-xs text-zinc-200 font-medium">Share to X</span>
+            </button>
+            <button onClick={() => setShowShareMenu(false)} className="w-full py-1.5 rounded-lg bg-zinc-800/50 text-zinc-500 text-xs font-medium hover:bg-zinc-700 transition-colors">
               Cancel
             </button>
           </div>
