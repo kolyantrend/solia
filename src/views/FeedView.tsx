@@ -530,42 +530,19 @@ const PostCard: FC<{
     setShowShareMenu(true);
   };
 
-  const handleDownloadWithLogo = async () => {
+  const handleDownload = async () => {
     try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = async () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        // Load and draw logo in bottom-right
-        const logo = new Image();
-        logo.crossOrigin = 'anonymous';
-        logo.onload = () => {
-          const logoH = Math.round(img.height * 0.06);
-          const logoW = Math.round(logo.width * (logoH / logo.height));
-          const padding = Math.round(img.height * 0.02);
-          // Semi-transparent background for logo
-          ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.beginPath();
-          ctx.roundRect(img.width - logoW - padding * 2, img.height - logoH - padding * 2, logoW + padding, logoH + padding, padding / 2);
-          ctx.fill();
-          ctx.drawImage(logo, img.width - logoW - padding * 1.5, img.height - logoH - padding * 1.5, logoW, logoH);
-          canvas.toBlob((blob) => {
-            if (!blob) return;
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `solia_${post.id}.png`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-          }, 'image/png');
-        };
-        logo.src = 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/Logo%20New.png';
-      };
-      img.src = post.imageUrl;
-    } catch { /* fallback: open image directly */ }
+      const resp = await fetch(post.imageUrl);
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `solia_${post.id}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      // Fallback: open in new tab
+      window.open(post.imageUrl, '_blank');
+    }
   };
 
   const handleCopyRefLink = async () => {
@@ -746,39 +723,48 @@ const PostCard: FC<{
 
       {/* Share Menu Modal */}
       {showShareMenu && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowShareMenu(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-t-2xl w-full max-w-md p-4 space-y-3 animate-in slide-in-from-bottom duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowShareMenu(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xs w-full p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">Share</h3>
-              <button onClick={() => setShowShareMenu(false)} className="text-zinc-500 hover:text-white transition-colors">
-                <X size={18} />
+              <h3 className="text-base font-bold text-white">Share</h3>
+              <button onClick={() => setShowShareMenu(false)} className="text-zinc-500 hover:text-white transition-colors p-1">
+                <X size={20} />
               </button>
             </div>
-            {/* Preview image */}
-            <div className="rounded-xl overflow-hidden border border-zinc-800 max-h-48">
-              <img src={post.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            {/* Preview */}
+            <div className="rounded-xl overflow-hidden border border-zinc-800">
+              <img src={post.imageUrl} alt="" className="w-full max-h-44 object-cover" referrerPolicy="no-referrer" />
             </div>
             {/* Actions */}
+            <div className="space-y-2">
+              <button
+                onClick={handleDownload}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
+              >
+                <Download size={18} className="text-indigo-400 shrink-0" />
+                <span className="text-sm text-zinc-200 font-medium">Download</span>
+              </button>
+              <button
+                onClick={handleCopyRefLink}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
+              >
+                {copiedRef ? <Check size={18} className="text-emerald-400 shrink-0" /> : <Copy size={18} className="text-indigo-400 shrink-0" />}
+                <span className="text-sm text-zinc-200 font-medium">{copiedRef ? 'Copied!' : 'Copy referral link'}</span>
+              </button>
+              <button
+                onClick={handleShareToX}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-indigo-400 shrink-0"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                <span className="text-sm text-zinc-200 font-medium">Share to X</span>
+              </button>
+            </div>
+            {/* Close button */}
             <button
-              onClick={handleDownloadWithLogo}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
+              onClick={() => setShowShareMenu(false)}
+              className="w-full py-2.5 rounded-xl bg-zinc-800/50 text-zinc-400 text-sm font-medium hover:bg-zinc-700 transition-colors"
             >
-              <Download size={18} className="text-indigo-400" />
-              <span className="text-sm text-zinc-200 font-medium">Download with logo</span>
-            </button>
-            <button
-              onClick={handleCopyRefLink}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
-            >
-              {copiedRef ? <Check size={18} className="text-emerald-400" /> : <Copy size={18} className="text-indigo-400" />}
-              <span className="text-sm text-zinc-200 font-medium">{copiedRef ? 'Copied!' : 'Copy referral link'}</span>
-            </button>
-            <button
-              onClick={handleShareToX}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition-colors"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-indigo-400"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              <span className="text-sm text-zinc-200 font-medium">Share to X</span>
+              Cancel
             </button>
           </div>
         </div>
