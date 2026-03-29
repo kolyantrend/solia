@@ -1,4 +1,4 @@
-import { FC, useState, useEffect, useCallback } from 'react';
+import { FC, useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { BANNERS, BannerConfig } from '../config/banners';
 
@@ -6,6 +6,9 @@ export const BannerCarousel: FC<{ banners?: BannerConfig[] }> = ({ banners: cust
   const [banners] = useState<BannerConfig[]>(customBanners || BANNERS);
   const [current, setCurrent] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+  const swiped = useRef(false);
 
   const goTo = useCallback((index: number) => {
     if (isTransitioning) return;
@@ -27,8 +30,32 @@ export const BannerCarousel: FC<{ banners?: BannerConfig[] }> = ({ banners: cust
     return () => clearInterval(timer);
   }, [next]);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    swiped.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    const threshold = 40;
+    if (Math.abs(diff) > threshold && !swiped.current) {
+      swiped.current = true;
+      if (diff > 0) next();
+      else prev();
+    }
+  };
+
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl group">
+    <div
+      className="relative w-full overflow-hidden rounded-2xl group"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="relative aspect-[3/1] w-full bg-zinc-900">
         {banners.map((banner, idx) => (
           <a
