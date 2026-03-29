@@ -1,5 +1,5 @@
 import { FC, useState, useEffect, useCallback } from 'react';
-import { Save, Send, Youtube, Users, ChevronLeft, ChevronRight, ImageIcon, Pencil, X, Monitor, Smartphone, Square, Loader2, Link2, Copy, Check, Download, UserPlus, UserMinus, ShoppingBag, ShoppingCart, History, ExternalLink, BadgeCheck, Shield } from 'lucide-react';
+import { Save, Send, Youtube, Users, ChevronLeft, ChevronRight, ImageIcon, Pencil, X, Monitor, Smartphone, Square, Loader2, Link2, Copy, Check, Download, UserPlus, UserMinus, ShoppingBag, ShoppingCart, History, ExternalLink, BadgeCheck, Shield, ClipboardPaste } from 'lucide-react';
 
 const XIcon: FC<{ size?: number; className?: string }> = ({ size = 16, className }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -1055,13 +1055,22 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                 Post Verification Tweet
               </a>
               <p className="text-sm text-zinc-400 mt-2">2. Paste the tweet URL here:</p>
-              <input
-                type="text"
-                placeholder="https://x.com/username/status/..."
-                value={tweetUrl}
-                onChange={(e) => setTweetUrl(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-blue-500/50 focus:outline-none"
-              />
+              <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5">
+                <input
+                  type="text"
+                  placeholder="https://x.com/username/status/..."
+                  value={tweetUrl}
+                  onChange={(e) => setTweetUrl(e.target.value)}
+                  className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-200 placeholder:text-zinc-600"
+                />
+                <button
+                  onClick={async () => { try { const txt = await navigator.clipboard.readText(); if (txt) setTweetUrl(txt); } catch {} }}
+                  className="text-zinc-500 hover:text-indigo-400 transition-colors shrink-0 p-1"
+                  title="Paste"
+                >
+                  <ClipboardPaste size={16} />
+                </button>
+              </div>
               <p className="text-[10px] text-zinc-500">You can delete the tweet after verification.</p>
             </div>
 
@@ -1162,35 +1171,56 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
               <div>
                 <div className="flex items-center gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                   <XIcon className="text-zinc-400 shrink-0" size={20} />
-                  <input 
-                    type="text" 
-                    placeholder="@username or https://x.com/username" 
+                  <input
+                    type="text"
+                    placeholder="@username or https://x.com/username"
                     value={tempTwitter}
                     onChange={(e) => setTempTwitter(e.target.value)}
                     className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-100 placeholder:text-zinc-600"
                   />
+                  <button
+                    onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setTempTwitter(t); } catch {} }}
+                    className="text-zinc-500 hover:text-indigo-400 transition-colors shrink-0 p-1"
+                    title="Paste"
+                  >
+                    <ClipboardPaste size={16} />
+                  </button>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-1 px-1">+ used as your profile avatar</p>
               </div>
               <div className="flex items-center gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                 <Send className="text-zinc-400 shrink-0" size={20} />
-                <input 
-                  type="text" 
-                  placeholder={t('prof.tgLink')} 
+                <input
+                  type="text"
+                  placeholder={t('prof.tgLink')}
                   value={tempTelegram}
                   onChange={(e) => setTempTelegram(e.target.value)}
                   className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-100 placeholder:text-zinc-600"
                 />
+                <button
+                  onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setTempTelegram(t); } catch {} }}
+                  className="text-zinc-500 hover:text-indigo-400 transition-colors shrink-0 p-1"
+                  title="Paste"
+                >
+                  <ClipboardPaste size={16} />
+                </button>
               </div>
               <div className="flex items-center gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                 <Youtube className="text-zinc-400 shrink-0" size={20} />
-                <input 
-                  type="text" 
-                  placeholder={t('prof.ytLink')} 
+                <input
+                  type="text"
+                  placeholder={t('prof.ytLink')}
                   value={tempYoutube}
                   onChange={(e) => setTempYoutube(e.target.value)}
                   className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-100 placeholder:text-zinc-600"
                 />
+                <button
+                  onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setTempYoutube(t); } catch {} }}
+                  className="text-zinc-500 hover:text-indigo-400 transition-colors shrink-0 p-1"
+                  title="Paste"
+                >
+                  <ClipboardPaste size={16} />
+                </button>
               </div>
             </div>
 
