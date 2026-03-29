@@ -85,7 +85,6 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
   const filteredReferrers = topReferrers.filter(r => r.wallet !== treasuryAddr);
 
   const sortedLeaderboard = [...leaderboard]
-    .filter(u => u.address !== treasuryAddr)
     .sort((a, b) => {
       if (activeTab === 'generations') return b.generations - a.generations;
       return b.totalLikes - a.totalLikes;

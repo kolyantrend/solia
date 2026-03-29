@@ -33,8 +33,7 @@ export const TopCreatorsTicker: FC<{ onViewProfile?: (address: string) => void }
   const [creators, setCreators] = useState<TopCreator[]>([]);
 
   useEffect(() => {
-    const treasuryAddr = TREASURY_WALLET.toBase58();
-    const fetch = () => getTopGenerators12h().then(data => setCreators(data.filter(c => c.wallet !== treasuryAddr))).catch(() => {});
+    const fetch = () => getTopGenerators12h().then(data => setCreators(data)).catch(() => {});
     fetch();
     const interval = setInterval(fetch, 120000);
     return () => clearInterval(interval);
