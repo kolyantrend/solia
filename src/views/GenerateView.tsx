@@ -69,7 +69,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     const interval = setInterval(() => {
       setGenElapsed(prev => {
         const next = prev + 1;
-        if (next >= 60) setShowGenHint(true);
+        if (next >= 180) setShowGenHint(true);
         return next;
       });
     }, 1000);
