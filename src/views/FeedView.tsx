@@ -569,7 +569,7 @@ const PostCard: FC<{
   };
 
   return (
-    <div className="rainbow-border rounded-3xl overflow-hidden shadow-xl backdrop-blur-sm bg-zinc-900/50">
+    <div className="bg-zinc-900/50 rounded-3xl overflow-hidden border border-zinc-800/50 shadow-xl backdrop-blur-sm">
       <div className="p-3 sm:p-4 flex items-center justify-between gap-2">
         <button
           onClick={() => onViewProfile?.(post.author)}
@@ -723,8 +723,8 @@ const PostCard: FC<{
 
       {/* Share Menu Modal */}
       {showShareMenu && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowShareMenu(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xs w-full p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6" onClick={() => setShowShareMenu(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-xs w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white">Share</h3>
               <button onClick={() => setShowShareMenu(false)} className="text-zinc-500 hover:text-white transition-colors p-1">
@@ -732,8 +732,8 @@ const PostCard: FC<{
               </button>
             </div>
             {/* Preview */}
-            <div className="rounded-xl overflow-hidden border border-zinc-800 mx-2 my-1">
-              <img src={post.imageUrl} alt="" className="w-full max-h-44 object-cover" referrerPolicy="no-referrer" />
+            <div className="rounded-xl overflow-hidden border border-zinc-800">
+              <img src={post.imageUrl} alt="" className="w-full max-h-36 object-cover" referrerPolicy="no-referrer" />
             </div>
             {/* Actions */}
             <div className="space-y-2">
