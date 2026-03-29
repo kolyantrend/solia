@@ -1,4 +1,4 @@
-import { FC, useState, useEffect } from 'react';
+import { FC, useState, useEffect, useRef } from 'react';
 import { BadgeCheck } from 'lucide-react';
 import { getTopGenerators12h } from '../lib/database';
 import { TREASURY_WALLET } from '../lib/solana';
@@ -47,9 +47,33 @@ export const TopCreatorsTicker: FC<{ onViewProfile?: (address: string) => void }
   // Double items for seamless loop
   const tickerItems = [...items, ...items];
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    // Pause animation on touch
+    if (scrollRef.current) scrollRef.current.style.animationPlayState = 'paused';
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!scrollRef.current) return;
+    const diff = e.touches[0].clientX - touchStartX.current;
+    scrollRef.current.style.transform = `translateX(${diff}px)`;
+  };
+  const handleTouchEnd = () => {
+    if (!scrollRef.current) return;
+    scrollRef.current.style.transform = '';
+    scrollRef.current.style.animationPlayState = 'running';
+  };
+
   return (
-    <div className="w-full overflow-hidden bg-zinc-900/50 border border-zinc-800/30 rounded-xl py-1">
-      <div className="flex animate-scroll-x-reverse gap-4 w-max">
+    <div
+      className="w-full overflow-hidden bg-zinc-900/50 border border-zinc-800/30 rounded-xl py-1"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div ref={scrollRef} className="flex animate-scroll-x-reverse gap-4 w-max">
         {tickerItems.map((creator, idx) => {
           const isReal = creators.length > 0;
           return (

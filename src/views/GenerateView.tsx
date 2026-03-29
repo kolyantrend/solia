@@ -1,7 +1,7 @@
 import React, { FC, useState, useEffect } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
-import { Loader2, Sparkles, Image as ImageIcon, CheckCircle2, Settings2, Upload, X, HelpCircle } from 'lucide-react';
+import { Loader2, Sparkles, Image as ImageIcon, CheckCircle2, Settings2, Upload, X, HelpCircle, ClipboardPaste } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { useI18n } from '../i18n';
 import * as db from '../lib/database';
@@ -46,6 +46,8 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
   const [grantCount, setGrantCount] = useState(1);
   const [grantMsg, setGrantMsg] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [genElapsed, setGenElapsed] = useState(0);
+  const [showGenHint, setShowGenHint] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,19 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     if (v) localStorage.setItem(paidKey, '1');
     else localStorage.removeItem(paidKey);
   };
+
+  // Generation timer — show hint after 60s
+  useEffect(() => {
+    if (!isGenerating) { setGenElapsed(0); setShowGenHint(false); return; }
+    const interval = setInterval(() => {
+      setGenElapsed(prev => {
+        const next = prev + 1;
+        if (next >= 60) setShowGenHint(true);
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   // Sync paid state when wallet changes
   useEffect(() => {
@@ -432,8 +447,18 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
             placeholder={t('gen.placeholder')}
             className="w-full h-24 sm:h-32 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 sm:p-4 text-sm sm:text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none transition-all"
           />
-          <div className={`text-right text-[10px] mr-1 ${prompt.length > MAX_PROMPT_LENGTH * 0.9 ? 'text-amber-400' : 'text-zinc-600'}`}>
-            {prompt.length}/{MAX_PROMPT_LENGTH}
+          <div className="flex items-center justify-between mx-1">
+            <button
+              onClick={async () => { try { const txt = await navigator.clipboard.readText(); if (txt) setPrompt(prev => { const combined = prev + txt; return combined.slice(0, MAX_PROMPT_LENGTH); }); } catch {} }}
+              className="flex items-center gap-1 text-zinc-500 hover:text-indigo-400 transition-colors"
+              title="Paste"
+            >
+              <ClipboardPaste size={14} />
+              <span className="text-[10px]">Paste</span>
+            </button>
+            <span className={`text-[10px] ${prompt.length > MAX_PROMPT_LENGTH * 0.9 ? 'text-amber-400' : 'text-zinc-600'}`}>
+              {prompt.length}/{MAX_PROMPT_LENGTH}
+            </span>
           </div>
         </div>
 
@@ -521,7 +546,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           ) : isGenerating ? (
             <>
               <Loader2 className="animate-spin" size={20} />
-              <span>{t('gen.generating')}</span>
+              <span>{t('gen.generating')} {genElapsed > 0 && `${genElapsed}s`}</span>
             </>
           ) : !connected ? (
             <span>{t('gen.connectWallet')}</span>
@@ -536,6 +561,11 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
         <p className="text-[11px] sm:text-xs text-amber-400 text-center leading-snug font-medium">
           {t('gen.patience')}
         </p>
+        {showGenHint && (
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] text-center leading-snug">
+            Taking too long? Try switching to another tab and back, then press Generate again (no extra charge).
+          </div>
+        )}
       </div>
 
       {result && (
