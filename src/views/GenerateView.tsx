@@ -50,6 +50,9 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
   const [showGenHint, setShowGenHint] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<db.DbDraft | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phantomRedirectUrl, setPhantomRedirectUrl] = useState<string | null>(null);
   const paidKey = publicKey ? `solia_paid_gen_${publicKey.toBase58()}` : '';
@@ -62,6 +65,18 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     if (v) localStorage.setItem(paidKey, '1');
     else localStorage.removeItem(paidKey);
   };
+
+  // Load pending draft on mount (user navigated away and came back)
+  useEffect(() => {
+    if (!publicKey) return;
+    db.getDrafts(publicKey.toBase58()).then(drafts => {
+      if (drafts.length > 0 && !pendingDraft && !isGenerating) {
+        const d = drafts[0];
+        setPendingDraft(d);
+        setResult(d.image_url);
+      }
+    });
+  }, [publicKey]);
 
   // Generation timer — show hint after 60s
   useEffect(() => {
@@ -103,7 +118,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
       return;
     }
 
-    // Compress image via canvas to avoid Gemini API size limits
+    // Compress image via canvas to avoid API size limits
     const img = new Image();
     img.onload = () => {
       const MAX_SIZE = 1024;
@@ -137,15 +152,58 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     return () => clearInterval(interval);
   }, []);
 
-  const runGeneration = async (): Promise<void> => {
-    if (!publicKey) throw new Error(t('gen.errWallet'));
-    setIsGenerating(true);
-    setError(null);
+  const runSecondaryGeneration = async (): Promise<string> => {
+    // Rotate between available API tokens for load balancing
+    const tokens = [
+      process.env.AI_SECONDARY_TOKEN,
+      process.env.AI_SECONDARY_TOKEN_2,
+      process.env.AI_SECONDARY_TOKEN_3,
+    ].filter(Boolean) as string[];
+    const token = tokens[Math.floor(Math.random() * tokens.length)];
+    const proxyBase = import.meta.env.DEV ? '/api/ai-proxy' : 'https://solia.live/api/ai-proxy';
+    const model = process.env.AI_SECONDARY_MODEL || '';
 
+    const imageInputs: string[] = [];
+    if (imageFile1) imageInputs.push(`data:${imageFile1.mimeType};base64,${imageFile1.data}`);
+    if (imageFile2) imageInputs.push(`data:${imageFile2.mimeType};base64,${imageFile2.data}`);
+
+    const res = await fetch(`${proxyBase}/v1/models/${model}/predictions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'wait',
+      },
+      body: JSON.stringify({
+        input: {
+          prompt,
+          resolution: resolution || '1K',
+          aspect_ratio: aspectRatio || '16:9',
+          image_input: imageInputs,
+          output_format: 'jpg',
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData?.detail || `Generation error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const output = data.output;
+    if (!output) throw new Error('No image returned');
+    const imgUrl = Array.isArray(output) ? output[0] : output;
+    if (!imgUrl) throw new Error('No image returned');
+    return imgUrl;
+  };
+
+  const runPrimaryGeneration = async (): Promise<string> => {
     // Rotate between available API keys for load balancing
-    const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(Boolean) as string[];
+    const keys = [process.env.AI_PRIMARY_KEY, process.env.AI_PRIMARY_KEY_2].filter(Boolean) as string[];
     const apiKey = keys[Math.floor(Math.random() * keys.length)];
     const ai = new GoogleGenAI({ apiKey });
+    const model = process.env.AI_PRIMARY_MODEL || '';
 
     // Retry up to 3 times on 503 / UNAVAILABLE
     let lastErr: any = null;
@@ -161,7 +219,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
         if (imageFile2) parts.push({ inlineData: { data: imageFile2.data, mimeType: imageFile2.mimeType } });
 
         const response = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-image-preview',
+          model,
           contents: { parts },
           config: {
             imageConfig: {
@@ -188,51 +246,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           }
           throw new Error(t('gen.errImage'));
         }
-
-        setResult(imageUrl);
-
-        // Upload image to Supabase Storage
-        let publicImageUrl = imageUrl;
-        let originalImageUrl = imageUrl;
-        try {
-          const base64Data = imageUrl.split(',')[1];
-          const byteChars = atob(base64Data);
-          const byteArray = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
-          const blob = new Blob([byteArray], { type: 'image/png' });
-          const uploaded = await db.uploadImage(blob, `gen_${Date.now()}.png`);
-          if (uploaded) {
-            publicImageUrl = uploaded.publicUrl;
-            originalImageUrl = uploaded.originalUrl;
-          }
-        } catch (e) { console.warn('Image upload fallback to base64:', e); }
-
-        // Save post to Supabase
-        const walletAddr = publicKey.toBase58();
-        const dbPost = await db.createPost({
-          author: walletAddr,
-          image_url: publicImageUrl,
-          original_url: originalImageUrl,
-          prompt,
-          category: category || 'Main',
-          aspect_ratio: aspectRatio,
-        });
-
-        const newPost = {
-          id: dbPost?.id || Date.now().toString(),
-          imageUrl: publicImageUrl,
-          prompt,
-          author: walletAddr,
-          likes: 0,
-          category: category !== 'Main' ? category : undefined,
-          aspectRatio,
-        };
-
-        await db.grantBonusLikes(walletAddr, 8);
-        db.markGenerationUsed(walletAddr);
-        markPaid(false);
-        onGenerate(newPost);
-        return;
+        return imageUrl;
       } catch (err: any) {
         lastErr = err;
         const msg = (err?.message || '') + (typeof err === 'object' ? JSON.stringify(err) : '');
@@ -243,6 +257,102 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
       }
     }
     throw lastErr;
+  };
+
+  const runGeneration = async (): Promise<void> => {
+    if (!publicKey) throw new Error(t('gen.errWallet'));
+    setIsGenerating(true);
+    setError(null);
+
+    const hasSecondary = !!process.env.AI_SECONDARY_TOKEN;
+    let imageUrl: string;
+
+    if (hasSecondary) {
+      try {
+        imageUrl = await runSecondaryGeneration();
+      } catch (e) {
+        console.warn('Secondary provider failed, falling back to primary:', e);
+        imageUrl = await runPrimaryGeneration();
+      }
+    } else {
+      imageUrl = await runPrimaryGeneration();
+    }
+
+    setResult(imageUrl);
+
+    // Upload image to Supabase Storage
+    let publicImageUrl = imageUrl;
+    let originalImageUrl = imageUrl;
+    try {
+      // External URL vs base64 data
+      if (imageUrl.startsWith('data:')) {
+        const base64Data = imageUrl.split(',')[1];
+        const byteChars = atob(base64Data);
+        const byteArray = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([byteArray], { type: 'image/png' });
+        const uploaded = await db.uploadImage(blob, `gen_${Date.now()}.png`);
+        if (uploaded) {
+          publicImageUrl = uploaded.publicUrl;
+          originalImageUrl = uploaded.originalUrl;
+        }
+      } else {
+        // External URL — fetch and upload to Supabase
+        const res = await fetch(imageUrl);
+        const blob = await res.blob();
+        const uploaded = await db.uploadImage(blob, `gen_${Date.now()}.jpg`);
+        if (uploaded) {
+          publicImageUrl = uploaded.publicUrl;
+          originalImageUrl = uploaded.originalUrl;
+        }
+      }
+    } catch (e) { console.warn('Image upload fallback:', e); }
+
+    // Save as draft in DB (persists even if user navigates away)
+    const draft = await db.createDraft({
+      author: publicKey.toBase58(),
+      image_url: publicImageUrl,
+      original_url: originalImageUrl,
+      prompt,
+      category: category || 'Main',
+      aspect_ratio: aspectRatio,
+    });
+    setPendingDraft(draft);
+    db.markGenerationUsed(publicKey.toBase58());
+    markPaid(false);
+  };
+
+  const handlePublish = async () => {
+    if (!pendingDraft || !publicKey) return;
+    setPublishing(true);
+    try {
+      const walletAddr = publicKey.toBase58();
+      const dbPost = await db.publishDraft(pendingDraft);
+      const newPost = {
+        id: dbPost?.id || Date.now().toString(),
+        imageUrl: pendingDraft.image_url,
+        prompt: pendingDraft.prompt,
+        author: walletAddr,
+        likes: 0,
+        category: pendingDraft.category !== 'Main' ? pendingDraft.category : undefined,
+        aspectRatio: pendingDraft.aspect_ratio,
+      };
+      await db.grantBonusLikes(walletAddr, 8);
+      onGenerate(newPost);
+      setPendingDraft(null);
+      setResult(null);
+      setPrompt('');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (pendingDraft) await db.deleteDraft(pendingDraft.id);
+    setPendingDraft(null);
+    setResult(null);
+    setShowDeleteConfirm(false);
+    setPrompt('');
   };
 
   const handleGenerate = async () => {
@@ -568,24 +678,54 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
         )}
       </div>
 
-      {result && (
-        <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center gap-2 text-emerald-400 justify-center">
-            <CheckCircle2 size={20} />
-            <span className="font-medium">{t('gen.done')}</span>
+      {result && pendingDraft && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-sm space-y-3">
+            <div className="flex items-center gap-2 text-emerald-400 justify-center">
+              <CheckCircle2 size={20} />
+              <span className="font-medium">{t('gen.done')}</span>
+            </div>
+            <div className="relative w-full rounded-2xl overflow-hidden border border-zinc-700 shadow-2xl">
+              <img src={result} alt="Generated" className="w-full h-auto object-contain max-h-[60vh]" />
+            </div>
+
+            {!showDeleteConfirm ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={handlePublish}
+                  disabled={publishing}
+                  className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {publishing ? <Loader2 size={16} className="animate-spin" /> : null}
+                  {t('gen.publish')}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex-1 py-3 rounded-xl bg-zinc-800 text-red-400 font-medium hover:bg-zinc-700 transition-colors"
+                >
+                  {t('gen.delete')}
+                </button>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 space-y-2.5">
+                <p className="text-sm text-red-300 text-center font-medium">{t('gen.deleteConfirm')}</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDiscard}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium hover:bg-red-500 transition-colors"
+                  >
+                    {t('gen.yes')}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 font-medium hover:bg-zinc-700 transition-colors"
+                  >
+                    {t('gen.cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="relative w-full rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl">
-            <img src={result} alt="Generated" className="w-full h-auto object-contain" />
-          </div>
-          <button 
-            onClick={() => {
-              setResult(null);
-              setPrompt('');
-            }}
-            className="w-full py-3 rounded-xl bg-zinc-800 text-zinc-300 font-medium hover:bg-zinc-700 transition-colors"
-          >
-            {t('gen.createMore')}
-          </button>
         </div>
       )}
 

@@ -128,7 +128,7 @@ export async function updateDisplayName(wallet: string, displayName: string): Pr
 }
 
 // ========================
-// RATE LIMITING (Gemini API protection)
+// RATE LIMITING (API protection)
 // ========================
 
 const DAILY_GEN_LIMIT = 50; // max generations per user per day
@@ -238,6 +238,7 @@ export interface DbPost {
 // Feed cache (3 min TTL) to reduce DB requests
 const feedCache = new Map<string, { data: DbPost[]; ts: number }>();
 const FEED_CACHE_TTL = 3 * 60 * 1000;
+export function invalidateFeedCache() { feedCache.clear(); }
 
 // Hot score: likes decay over time so posts rotate naturally
 function hotScore(post: DbPost): number {
@@ -333,6 +334,89 @@ export async function createPost(post: {
     if (error) console.error('createPost error:', error);
     return data;
   } catch (e) { console.warn('createPost:', e); return null; }
+}
+
+// ========================
+// DRAFTS
+// ========================
+
+export interface DbDraft {
+  id: string;
+  author: string;
+  image_url: string;
+  original_url: string | null;
+  prompt: string;
+  category: string;
+  aspect_ratio: string;
+  created_at: string;
+}
+
+export async function createDraft(draft: {
+  author: string;
+  image_url: string;
+  original_url?: string;
+  prompt: string;
+  category: string;
+  aspect_ratio: string;
+}): Promise<DbDraft | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const { data, error } = await supabase
+      .from('drafts')
+      .insert(draft)
+      .select()
+      .single();
+    if (error) console.error('createDraft error:', error);
+    return data;
+  } catch (e) { console.warn('createDraft:', e); return null; }
+}
+
+export async function getDrafts(wallet: string): Promise<DbDraft[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data } = await supabase
+      .from('drafts')
+      .select('*')
+      .eq('author', wallet)
+      .order('created_at', { ascending: false });
+    return data || [];
+  } catch (e) { console.warn('getDrafts:', e); return []; }
+}
+
+export async function getAllDrafts(): Promise<DbDraft[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data } = await supabase
+      .from('drafts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(0, 49);
+    return data || [];
+  } catch (e) { console.warn('getAllDrafts:', e); return []; }
+}
+
+export async function deleteDraft(draftId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { error } = await supabase.from('drafts').delete().eq('id', draftId);
+    return !error;
+  } catch { return false; }
+}
+
+export async function publishDraft(draft: DbDraft): Promise<DbPost | null> {
+  const post = await createPost({
+    author: draft.author,
+    image_url: draft.image_url,
+    original_url: draft.original_url || undefined,
+    prompt: draft.prompt,
+    category: draft.category,
+    aspect_ratio: draft.aspect_ratio,
+  });
+  if (post) {
+    await deleteDraft(draft.id);
+    invalidateFeedCache();
+  }
+  return post;
 }
 
 // ========================
@@ -634,11 +718,39 @@ export async function unfollowUser(follower: string, following: string): Promise
   } catch { return false; }
 }
 
+export async function getTopByFollowers(limit = 50): Promise<{ wallet: string; follower_count: number }[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    // Fetch all follows and count followers per wallet
+    let allFollows: { following_wallet: string }[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from('follows')
+        .select('following_wallet')
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      allFollows = allFollows.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    const counts = new Map<string, number>();
+    for (const f of allFollows) {
+      counts.set(f.following_wallet, (counts.get(f.following_wallet) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([wallet, follower_count]) => ({ wallet, follower_count }));
+  } catch (e) { console.warn('getTopByFollowers:', e); return []; }
+}
+
 // ========================
 // LEADERBOARD
 // ========================
 
-export async function getLeaderboard(periodHours?: number): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]> {
+export async function getLeaderboard(periodHours?: number): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; telegram: string; youtube: string; verified: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
     // Fetch all posts (paginated to avoid Supabase 1000-row default limit)
@@ -677,18 +789,20 @@ export async function getLeaderboard(periodHours?: number): Promise<{ wallet: st
     const wallets = top.map((t) => t.wallet);
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('wallet, avatar_url, twitter, verified, display_name')
+      .select('wallet, avatar_url, twitter, telegram, youtube, verified, display_name')
       .in('wallet', wallets);
 
-    const profileMap = new Map<string, { avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }>();
+    const profileMap = new Map<string, { avatar_url: string | null; twitter: string; telegram: string; youtube: string; verified: boolean; display_name: string | null }>();
     for (const p of profiles || []) {
-      profileMap.set(p.wallet, { avatar_url: p.avatar_url, twitter: p.twitter || '', verified: !!p.verified, display_name: p.display_name || null });
+      profileMap.set(p.wallet, { avatar_url: p.avatar_url, twitter: p.twitter || '', telegram: p.telegram || '', youtube: p.youtube || '', verified: !!p.verified, display_name: p.display_name || null });
     }
 
     return top.map((t) => ({
       ...t,
       avatar_url: profileMap.get(t.wallet)?.avatar_url || null,
       twitter: profileMap.get(t.wallet)?.twitter || '',
+      telegram: profileMap.get(t.wallet)?.telegram || '',
+      youtube: profileMap.get(t.wallet)?.youtube || '',
       verified: profileMap.get(t.wallet)?.verified || false,
       display_name: profileMap.get(t.wallet)?.display_name || null,
     }));
@@ -745,7 +859,7 @@ export async function getTopGenerators12h(): Promise<{ wallet: string; count: nu
     const wallets = top.map((t) => t.wallet);
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('wallet, avatar_url, twitter, verified, display_name')
+      .select('wallet, avatar_url, twitter, telegram, youtube, verified, display_name')
       .in('wallet', wallets);
 
     const profileMap = new Map<string, { avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }>();

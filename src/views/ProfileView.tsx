@@ -49,7 +49,7 @@ function shortAddr(addr: string) {
   return addr.slice(0, 4) + '...' + addr.slice(-4);
 }
 
-type ProfileTab = 'works' | 'purchased' | 'history';
+type ProfileTab = 'works' | 'purchased' | 'history' | 'drafts';
 
 export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: string) => void; onOpenLegal?: (page: 'terms' | 'privacy') => void }> = ({ viewAddress, onViewProfile, onOpenLegal }) => {
   const { t } = useI18n();
@@ -68,7 +68,11 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const [showEditModal, setShowEditModal] = useState(false);
   const [works, setWorks] = useState<WorkItem[]>([]);
   const [purchased, setPurchased] = useState<WorkItem[]>([]);
+  const [drafts, setDrafts] = useState<db.DbDraft[]>([]);
+  const [draftDeleteConfirm, setDraftDeleteConfirm] = useState<string | null>(null);
+  const [draftPublishing, setDraftPublishing] = useState<string | null>(null);
   const [profileTab, setProfileTab] = useState<ProfileTab>('works');
+  const isAdmin = walletAddr === TREASURY_WALLET.toBase58();
   const [worksPage, setWorksPage] = useState(0);
   const [worksFormat, setWorksFormat] = useState<WorksFormatFilter>('all');
   const [followers, setFollowers] = useState<string[]>([]);
@@ -174,6 +178,12 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
       setFollowing(fng);
       setLoading(false);
     });
+    // Load drafts (own profile or admin sees all)
+    if (isOwnProfile && walletAddr) {
+      db.getDrafts(walletAddr).then(setDrafts);
+    } else if (isAdmin) {
+      db.getAllDrafts().then(setDrafts);
+    }
     // Check if current user follows this profile
     if (walletAddr && profileAddr !== walletAddr) {
       db.getFollowing(walletAddr).then((fng) => {
@@ -602,6 +612,17 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
             <History size={14} className="shrink-0" />
             <span className="truncate">History</span>
           </button>
+          {(isOwnProfile || isAdmin) && drafts.length > 0 && (
+            <button
+              onClick={() => { setProfileTab('drafts'); setWorksPage(0); }}
+              className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
+                profileTab === 'drafts' ? 'bg-orange-500 text-white' : 'text-zinc-400 hover:text-zinc-200 bg-zinc-800'
+              }`}
+            >
+              <Pencil size={14} className="shrink-0" />
+              <span className="truncate">{t('prof.drafts')} ({drafts.length})</span>
+            </button>
+          )}
         </div>
 
         {/* Shared Format Filter (hide on history tab) */}
@@ -756,6 +777,68 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
             </>
           ) : (
             <div className="text-center py-8 text-zinc-500 text-sm">No transactions yet</div>
+          )
+        ) : profileTab === 'drafts' ? (
+          drafts.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {drafts.map((draft) => (
+                <div key={draft.id} className="relative rounded-xl overflow-hidden border border-orange-500/30 bg-zinc-950">
+                  <img src={draft.image_url} alt="" className="w-full aspect-square object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2 space-y-1.5">
+                    <p className="text-[9px] text-zinc-400 truncate">{draft.prompt}</p>
+                    <p className="text-[8px] text-zinc-600">
+                      {new Date(draft.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}{' '}
+                      {new Date(draft.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    {draftDeleteConfirm === draft.id ? (
+                      <div className="space-y-1">
+                        <p className="text-[9px] text-red-400 text-center font-medium">{t('gen.deleteConfirm')}</p>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={async () => {
+                              await db.deleteDraft(draft.id);
+                              setDrafts(prev => prev.filter(d => d.id !== draft.id));
+                              setDraftDeleteConfirm(null);
+                            }}
+                            className="flex-1 py-1 rounded-lg bg-red-600 text-white text-[10px] font-medium"
+                          >{t('gen.yes')}</button>
+                          <button
+                            onClick={() => setDraftDeleteConfirm(null)}
+                            className="flex-1 py-1 rounded-lg bg-zinc-700 text-zinc-300 text-[10px] font-medium"
+                          >{t('gen.cancel')}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1">
+                        <button
+                          disabled={draftPublishing === draft.id}
+                          onClick={async () => {
+                            setDraftPublishing(draft.id);
+                            const post = await db.publishDraft(draft);
+                            if (post) {
+                              await db.grantBonusLikes(draft.author, 8);
+                              setDrafts(prev => prev.filter(d => d.id !== draft.id));
+                              setWorks(prev => [{ id: post.id, imageUrl: post.image_url, originalUrl: post.original_url, prompt: post.prompt, category: post.category, aspectRatio: post.aspect_ratio, author: post.author, createdAt: post.created_at }, ...prev]);
+                            }
+                            setDraftPublishing(null);
+                          }}
+                          className="flex-1 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-medium disabled:opacity-50 flex items-center justify-center gap-1"
+                        >
+                          {draftPublishing === draft.id && <Loader2 size={10} className="animate-spin" />}
+                          {t('gen.publish')}
+                        </button>
+                        <button
+                          onClick={() => setDraftDeleteConfirm(draft.id)}
+                          className="flex-1 py-1 rounded-lg bg-zinc-800 text-red-400 text-[10px] font-medium"
+                        >{t('gen.delete')}</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-zinc-500 text-sm">{t('prof.noDrafts')}</div>
           )
         ) : null}
       </div>

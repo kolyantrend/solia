@@ -145,11 +145,11 @@ export const FeedView: FC<{ posts: Post[]; onViewProfile?: (address: string) => 
     }
   }, [activeSort, activeCategory, offset]);
 
-  // Reload on sort/category change
+  // Reload on sort/category change or when new post is added via props
   useEffect(() => {
     setOffset(0);
     loadPosts(true);
-  }, [activeSort, activeCategory]);
+  }, [activeSort, activeCategory, posts.length]);
 
   // Infinite scroll observer
   useEffect(() => {

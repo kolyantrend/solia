@@ -2,31 +2,33 @@
 
 # Solia - AI Content Monetization Platform on Solana!
 
-> **⚠️ PRIVATE REPOSITORY** - This is proprietary software. Do not share, fork, or redistribute without authorization.
-
 A decentralized social platform for AI creators to monetize their content on the Solana blockchain. Create, share, and sell AI-generated images with SKR tokens. Built with React, Vite, and Supabase.
 
 [![Twitter](https://img.shields.io/badge/Twitter-@SoliaLive-1DA1F2?style=flat&logo=twitter)](https://x.com/SoliaLive)
 [![Solana](https://img.shields.io/badge/Solana-Mainnet-9945FF?style=flat&logo=solana)](https://solana.com)
 
-## 🌟 Features
+## Features
 
 ### Core Functionality
-- **🎨 AI Image Generation** - Create unique images using advanced AI models
-- **💰 Content Monetization** - Sell AI-generated images directly to buyers with SKR tokens
-- **📱 Social Feed** - Discover trending creations with smart Hot/New/Trends algorithms
-- **👤 Creator Profiles** - Customizable profiles with Twitter verification
-- **📊 Analytics Dashboard** - Real-time platform statistics and insights
-- **🔥 Top Creators Ticker** - Rotating showcase of trending artists
+- **AI Image Generation** - Create unique images using advanced AI models with multi-provider fallback
+- **Content Monetization** - Sell AI-generated images directly to buyers with SKR tokens
+- **Social Feed** - Discover trending creations with smart Hot/New/Trends algorithms
+- **Creator Profiles** - Customizable profiles with social media verification (X, Telegram, YouTube)
+- **Analytics Dashboard** - Real-time platform statistics and insights
+- **Top Creators Ticker** - Rotating showcase of trending artists
 
 ### Advanced Features
-- **🧠 Smart Sorting Algorithms** - Time-decay scoring for natural content rotation
-- **🎁 Referral System** - Bring new users and earn from their activity (15% on generations, 15% on purchases)
-- **👥 Follow System** - Build your creator network
-- **❤️ Like & Comment** - Engage with the community
-- **🛡️ Daily Like Limits** - Bot protection with bonus system (2 base + 8 per generation + 10 per purchase)
-- **📜 Transaction History** - Track all platform activity
-- **🔒 Image Protection** - Download prevention with overlay shield
+- **Smart Sorting Algorithms** - Time-decay scoring for natural content rotation
+- **Referral System** - Bring new users and earn from their activity (15% on generations, 15% on purchases)
+- **Follow System** - Build your creator network
+- **Like & Comment** - Engage with the community
+- **Drafts System** - Save generated images as drafts before publishing, persist across sessions
+- **Post Preview** - Review generated images with Publish/Delete options before going live
+- **Leaderboard** - Top creators by posts, likes, followers, and referrals with social links
+- **Daily Like Limits** - Bot protection with bonus system (2 base + 8 per generation + 10 per purchase)
+- **Transaction History** - Track all platform activity
+- **Image Protection** - Download prevention with overlay shield
+- **Multi-language** - 6 languages supported (EN, RU, ZH, HI, VI, JA)
 
 ### Monetization Model
 
@@ -55,7 +57,7 @@ A decentralized social platform for AI creators to monetize their content on the
 
 **Atomic Transactions:** Solana guarantees all transfers succeed or all fail - no partial payments
 
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Frontend
 - **React 19** - Modern UI framework with latest features
@@ -77,11 +79,11 @@ A decentralized social platform for AI creators to monetize their content on the
 
 ### Backend & Services
 - **Supabase** - PostgreSQL database with real-time features
-- **AI API** - Image generation engine
+- **AI API** - Image generation engine with multi-provider fallback and key rotation
 - **Twitter oEmbed API** - Profile verification
 - **CoinGecko API** - Live crypto prices
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 - Node.js 18+
@@ -110,34 +112,27 @@ Create `.env.local` from the example file:
 cp .env.example .env.local
 ```
 
-Edit `.env.local`:
-```env
-# Image generation API key
-AI_API_KEY=your_ai_api_key
-
-# Supabase Configuration
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# Solana RPC (optional - uses public RPC if not set)
-VITE_SOLANA_RPC_URL=your_custom_rpc_url
-```
+Edit `.env.local` with your API keys (see `.env.example` for all available options).
 
 4. **Run development server**
 ```bash
 npm run dev
 ```
 
-Visit the local dev server to start developing.
+5. **Build for production**
+```bash
+npm run build
+```
 
-## 🗄 Database Schema
+## Database Schema
 
 ### Core Tables
 
 | Table | Description |
 |-------|-------------|
-| `profiles` | User profiles (wallet, display_name, twitter, verified, ref_code) |
+| `profiles` | User profiles (wallet, display_name, twitter, telegram, youtube, verified, ref_code) |
 | `posts` | AI-generated images (author, image_url, prompt, category, likes_count) |
+| `drafts` | Unpublished generated images (author, image_url, prompt, category) |
 | `likes` | User engagement tracking |
 | `comments` | Post discussions |
 | `purchases` | Content purchase records |
@@ -146,7 +141,7 @@ Visit the local dev server to start developing.
 | `transactions` | Financial history |
 | `daily_likes` | Bot protection system |
 
-## 🎨 Key Features Explained
+## Key Features Explained
 
 ### Feed Algorithm
 
@@ -161,23 +156,31 @@ Visit the local dev server to start developing.
 - **Feed Cache** - 3 min TTL (single query for 200 posts, client-side scoring)
 - **Stats Cache** - 5 min TTL
 
-## 📱 Mobile Support
+### Generation Flow
+1. User pays SKR tokens for generation
+2. AI generates image with automatic provider fallback
+3. Image saved as draft in database
+4. User previews result in fullscreen overlay
+5. Publish to feed or delete (with confirmation)
+6. Drafts persist across sessions and are visible in profile
+
+## Mobile Support
 
 - Solana Mobile Wallet Adapter integration
 - Responsive design for all screen sizes
 - Touch-optimized UI components
 
-## 🌐 Internationalization
+## Internationalization
 
 Supported languages (6):
-- 🇬🇧 English (en)
-- 🇷🇺 Russian (ru)
-- 🇨🇳 Chinese (zh)
-- 🇮🇳 Hindi (hi)
-- 🇻🇳 Vietnamese (vi)
-- 🇯🇵 Japanese (ja)
+- English (en)
+- Russian (ru)
+- Chinese (zh)
+- Hindi (hi)
+- Vietnamese (vi)
+- Japanese (ja)
 
-## 🔧 Development
+## Development
 
 ### Type checking
 ```bash
@@ -196,10 +199,10 @@ src/
 │   └── TopCreatorsTicker.tsx
 ├── views/
 │   ├── FeedView.tsx         # Main feed with smart algorithms
-│   ├── GenerateView.tsx     # AI image generation
-│   ├── LeaderboardView.tsx  # Top creators ranking
+│   ├── GenerateView.tsx     # AI image generation with drafts
+│   ├── LeaderboardView.tsx  # Top creators / likes / followers / referrals
 │   ├── StatsView.tsx        # Analytics dashboard
-│   └── ProfileView.tsx      # User profiles
+│   └── ProfileView.tsx      # User profiles with drafts tab
 ├── lib/
 │   ├── database.ts          # Supabase queries with caching
 │   ├── solana.ts            # SKR token transfers & config
@@ -212,7 +215,7 @@ src/
 └── index.css                # Theme variables & styles
 ```
 
-## 🔒 Security Notes
+## Security Notes
 
 **Protected by .gitignore (never committed):**
 - `.env.local` - API keys & secrets
@@ -227,26 +230,26 @@ src/
 - Atomic Solana transactions
 - Referral validation
 
-## 📄 License
+## License
 
-**Proprietary and Confidential**
+MIT
 
-This software is the exclusive property of the Solia team. Unauthorized copying, distribution, modification, or use is strictly prohibited.
-
-## 🔗 Links
+## Links
 
 - [Twitter](https://x.com/SoliaLive)
 - [Solana Explorer](https://solscan.io/token/SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3)
 
-## 💡 Roadmap
+## Roadmap
 
 - [x] Mobile app (Android APK + PWA)
-- [x] Advanced AI models integration (Gemini)
+- [x] Advanced AI models integration
 - [x] MWA wallet support (Phantom, Jupiter, Solflare)
+- [x] Drafts system with post preview
+- [x] Followers leaderboard
 - [ ] Creator subscriptions
 - [ ] DAO governance
 - [ ] Cross-chain support
 
 ---
 
-**Built with ❤️ on Solana**
+**Built with love on Solana**

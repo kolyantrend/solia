@@ -8,7 +8,7 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [
-      react(), 
+      react(),
       tailwindcss(),
       nodePolyfills({
         include: ['buffer', 'crypto', 'stream', 'util'],
@@ -18,9 +18,14 @@ export default defineConfig(({mode}) => {
       }),
     ],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY_2': JSON.stringify(env.GEMINI_API_KEY_2 || ''),
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.AI_PRIMARY_KEY': JSON.stringify(env.AI_PRIMARY_KEY),
+      'process.env.AI_PRIMARY_KEY_2': JSON.stringify(env.AI_PRIMARY_KEY_2 || ''),
+      'process.env.AI_SECONDARY_TOKEN': JSON.stringify(env.AI_SECONDARY_TOKEN || ''),
+      'process.env.AI_SECONDARY_TOKEN_2': JSON.stringify(env.AI_SECONDARY_TOKEN_2 || ''),
+      'process.env.AI_SECONDARY_TOKEN_3': JSON.stringify(env.AI_SECONDARY_TOKEN_3 || ''),
+      'process.env.AI_PRIMARY_MODEL': JSON.stringify(env.AI_PRIMARY_MODEL || ''),
+      'process.env.AI_SECONDARY_URL': JSON.stringify(env.AI_SECONDARY_URL || ''),
+      'process.env.AI_SECONDARY_MODEL': JSON.stringify(env.AI_SECONDARY_MODEL || ''),
     },
     resolve: {
       alias: {
@@ -28,9 +33,14 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api/ai-proxy': {
+          target: env.AI_SECONDARY_URL || 'https://localhost',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/api\/ai-proxy/, ''),
+        },
+      },
     },
   };
 });
