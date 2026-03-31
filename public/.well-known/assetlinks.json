@@ -1,8 +1,8 @@
 [{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "live.solia.twa",
-    "sha256_cert_fingerprints": ["E4:7E:B6:0B:C1:9A:F3:68:71:5D:96:5C:DD:78:85:E2:E9:F9:B4:42:12:6E:04:F1:74:78:D5:81:AE:08:3A:99"]
-  }
-}]
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "live.solia.app",
+        "sha256_cert_fingerprints": ["6D:9E:46:61:38:3B:E3:08:C7:FD:7C:12:09:09:28:69:95:23:41:23:B5:B6:CB:F4:E0:68:86:41:5C:57:85:86"]
+      }
+    }]
