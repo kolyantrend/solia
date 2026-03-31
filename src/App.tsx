@@ -8,6 +8,7 @@ import { ProfileView } from './views/ProfileView';
 import { StatsView } from './views/StatsView';
 import { TermsView } from './views/TermsView';
 import { PrivacyView } from './views/PrivacyView';
+import { LicenseView } from './views/LicenseView';
 import { Key, ArrowLeft } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n';
 import { ThemeProvider } from './theme';
@@ -76,10 +77,11 @@ function AppInner() {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [viewingProfile, setViewingProfile] = useState<string | null>(null);
   const [previousTab, setPreviousTab] = useState<string>('feed');
-  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | null>(() => {
+  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | 'license' | null>(() => {
     const path = window.location.pathname;
     if (path === '/terms') return 'terms';
     if (path === '/privacy') return 'privacy';
+    if (path === '/license') return 'license';
     return null;
   });
 
@@ -127,7 +129,7 @@ function AppInner() {
     setActiveTab(tab);
   };
 
-  const handleOpenLegal = (page: 'terms' | 'privacy') => {
+  const handleOpenLegal = (page: 'terms' | 'privacy' | 'license') => {
     setPreviousTab(activeTab);
     setLegalPage(page);
     window.history.pushState(null, '', `/${page}`);
@@ -144,19 +146,22 @@ function AppInner() {
       const path = window.location.pathname;
       if (path === '/terms') setLegalPage('terms');
       else if (path === '/privacy') setLegalPage('privacy');
+      else if (path === '/license') setLegalPage('license');
       else setLegalPage(null);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // Direct URL access to /terms or /privacy — render standalone (no app shell, no wallet needed)
+  // Direct URL access to /terms, /privacy, /license — render standalone (no app shell, no wallet needed)
   if (legalPage && window.location.pathname === `/${legalPage}`) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-50">
         {legalPage === 'terms'
           ? <TermsView />
-          : <PrivacyView />
+          : legalPage === 'privacy'
+          ? <PrivacyView />
+          : <LicenseView />
         }
       </div>
     );

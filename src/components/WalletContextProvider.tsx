@@ -3,7 +3,9 @@ import { UnifiedWalletProvider } from '@jup-ag/wallet-adapter';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
 
 export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
-    const [isMobile, setIsMobile] = useState(false);
+    const [isMobile] = useState(() =>
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    );
 
     // Listen for Phantom wallet account changes (user switches wallet inside Phantom)
     useEffect(() => {
@@ -45,10 +47,7 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
     }, []);
 
     useEffect(() => {
-        const checkMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        setIsMobile(checkMobile);
-
-        if (checkMobile) {
+        if (isMobile) {
             // Use MutationObserver to hide duplicate wallets in the picker.
             // CSS :has() is unsupported in many Android WebViews, so we do it via JS.
             const hideDuplicateWallets = () => {
@@ -66,6 +65,12 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
                 for (let i = 1; i < mobileItems.length; i++) {
                     mobileItems[i].style.display = 'none';
                 }
+                // Hide "More wallets" section on mobile — only MWA works in TWA
+                document.querySelectorAll('button').forEach(btn => {
+                    if (btn.textContent?.trim() === 'More wallets') {
+                        (btn as HTMLElement).style.display = 'none';
+                    }
+                });
             };
 
             // Run immediately + observe for dynamic renders

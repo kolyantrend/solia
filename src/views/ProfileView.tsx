@@ -51,7 +51,7 @@ function shortAddr(addr: string) {
 
 type ProfileTab = 'works' | 'purchased' | 'history' | 'drafts';
 
-export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: string) => void; onOpenLegal?: (page: 'terms' | 'privacy') => void }> = ({ viewAddress, onViewProfile, onOpenLegal }) => {
+export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: string) => void; onOpenLegal?: (page: 'terms' | 'privacy' | 'license') => void }> = ({ viewAddress, onViewProfile, onOpenLegal }) => {
   const { t } = useI18n();
   const { publicKey } = useUnifiedWallet();
   const { sendTransaction, signTransaction } = useWallet();
@@ -994,6 +994,13 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
             className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
           >
             Privacy Policy
+          </button>
+          <span className="text-zinc-700">·</span>
+          <button
+            onClick={() => onOpenLegal('license')}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            License
           </button>
         </div>
       )}
