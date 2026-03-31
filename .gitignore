@@ -37,6 +37,9 @@ tmp/
 .windsurf/
 .claude/
 
+# assetlinks.json — lives permanently on server, never overwrite via deploy
+public/.well-known/assetlinks.json
+
 # Android (Capacitor) build artifacts
 android/app/build/
 android/.gradle/
