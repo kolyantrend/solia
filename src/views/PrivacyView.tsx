@@ -109,9 +109,9 @@ export const PrivacyView: FC<{ onBack?: () => void }> = ({ onBack }) => {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-zinc-200">11. Contact</h2>
         <p className="text-sm text-zinc-400 leading-relaxed">
-          For privacy-related inquiries, please reach out through our official channels at{' '}
-          <a href="https://solia.live" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 transition-colors">
-            solia.live
+          For privacy-related inquiries, please contact us at{' '}
+          <a href="mailto:support@solia.live" className="text-indigo-400 hover:text-indigo-300 transition-colors">
+            support@solia.live
           </a>.
         </p>
       </section>

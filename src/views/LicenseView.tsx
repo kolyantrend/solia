@@ -85,8 +85,8 @@ export const LicenseView: FC<{ onBack?: () => void }> = ({ onBack }) => {
         <h2 className="text-lg font-semibold text-zinc-200">10. Contact</h2>
         <p className="text-sm text-zinc-400 leading-relaxed">
           For questions about this License Agreement, please contact us at{' '}
-          <a href="mailto:legal@solia.live" className="text-indigo-400 hover:text-indigo-300 transition-colors">
-            legal@solia.live
+          <a href="mailto:support@solia.live" className="text-indigo-400 hover:text-indigo-300 transition-colors">
+            support@solia.live
           </a>
           .
         </p>

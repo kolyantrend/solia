@@ -4,7 +4,7 @@
  * Caches app shell on install, serves from cache with network fallback.
  */
 
-const CACHE_NAME = 'solia-v1';
+const CACHE_NAME = 'solia-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -43,6 +43,9 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and cross-origin API calls
   if (event.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
+
+  // Always fetch legal pages fresh from network (static HTML, not React app)
+  if (['/terms', '/privacy', '/license'].includes(url.pathname)) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
