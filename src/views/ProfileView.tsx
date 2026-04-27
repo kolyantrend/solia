@@ -10,7 +10,7 @@ import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { useI18n } from '../i18n';
 import * as db from '../lib/database';
 import { SolanaAvatar } from '../components/SolanaAvatar';
-import { getTwitterAvatarUrl, fetchTwitterDisplayName, extractTwitterUsername, verifyTwitterBio } from '../lib/utils';
+import { getTwitterAvatarUrl, fetchTwitterDisplayName, extractTwitterUsername, verifyTwitterBio, getProfileDisplayName } from '../lib/utils';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
@@ -426,12 +426,17 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
       }
     }
 
+    // If Twitter changed — reset verification (new account needs re-verification)
+    const twitterChanged = tempTwitter !== twitter;
+    if (twitterChanged && verified) setVerified(false);
+
     await db.upsertProfile({
       wallet: walletAddr,
       twitter: tempTwitter,
       telegram: tempTelegram,
       youtube: tempYoutube,
       ...(newDisplayName && !displayName ? { display_name: newDisplayName } : {}),
+      ...(twitterChanged ? { verified: false } : {}),
     });
     setShowEditModal(false);
   };
@@ -932,13 +937,9 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                         return av ? <img src={av} className="w-6 h-6 rounded-full object-cover" alt="" /> : <SolanaAvatar size={24} />;
                       })()}
                       <span className="text-xs text-zinc-300">
-                        {(() => {
-                          const rp = refProfiles.get(r.wallet);
-                          if (rp?.display_name) return rp.display_name;
-                          if (rp?.twitter) return `@${extractTwitterUsername(rp.twitter)}`;
-                          return shortAddr(r.wallet);
-                        })()}
+                        {getProfileDisplayName(refProfiles.get(r.wallet), r.wallet)}
                       </span>
+                      {refProfiles.get(r.wallet)?.verified && <BadgeCheck size={10} className="text-blue-400 shrink-0" />}
                     </button>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${

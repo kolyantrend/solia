@@ -46,6 +46,24 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
         };
     }, []);
 
+    // MWA fix: when user cancels system wallet picker and returns to app,
+    // reload page to reset stuck MWA adapter state
+    useEffect(() => {
+        if (!isMobile) return;
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && (window as any).__mwaConnecting) {
+                (window as any).__mwaConnecting = false;
+                // MWA adapter is stuck after cancel — reload to reset
+                localStorage.removeItem('unified-wallet-previously-connected');
+                localStorage.removeItem('walletName');
+                localStorage.removeItem('SolanaMobileWalletAdapterDefaultAuthorizationCache');
+                window.location.reload();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, [isMobile]);
+
     useEffect(() => {
         if (isMobile) {
             // Use MutationObserver to hide duplicate wallets in the picker.
@@ -69,6 +87,27 @@ export const WalletContextProvider: FC<{ children: ReactNode }> = ({ children })
                 document.querySelectorAll('button').forEach(btn => {
                     if (btn.textContent?.trim() === 'More wallets') {
                         (btn as HTMLElement).style.display = 'none';
+                    }
+                });
+
+                // Track MWA clicks — on second attempt, reload to reset stuck adapter
+                document.querySelectorAll('img[alt="Mobile Wallet Adapter icon"]').forEach(img => {
+                    const li = img.closest('li');
+                    if (li && !(li as any).__mwaTracked) {
+                        (li as any).__mwaTracked = true;
+                        li.addEventListener('click', () => {
+                            const attempts = (window as any).__mwaAttempts || 0;
+                            if (attempts > 0) {
+                                // MWA is stuck from previous cancelled attempt — reload
+                                localStorage.removeItem('unified-wallet-previously-connected');
+                                localStorage.removeItem('walletName');
+                                localStorage.removeItem('SolanaMobileWalletAdapterDefaultAuthorizationCache');
+                                window.location.reload();
+                                return;
+                            }
+                            (window as any).__mwaAttempts = attempts + 1;
+                            (window as any).__mwaConnecting = true;
+                        });
                     }
                 });
             };

@@ -17,15 +17,15 @@ export default defineConfig(({mode}) => {
         },
       }),
     ],
-    define: {
-      'process.env.AI_PRIMARY_KEY': JSON.stringify(env.AI_PRIMARY_KEY),
-      'process.env.AI_PRIMARY_KEY_2': JSON.stringify(env.AI_PRIMARY_KEY_2 || ''),
-      'process.env.AI_SECONDARY_TOKEN': JSON.stringify(env.AI_SECONDARY_TOKEN || ''),
-      'process.env.AI_SECONDARY_TOKEN_2': JSON.stringify(env.AI_SECONDARY_TOKEN_2 || ''),
-      'process.env.AI_SECONDARY_TOKEN_3': JSON.stringify(env.AI_SECONDARY_TOKEN_3 || ''),
-      'process.env.AI_PRIMARY_MODEL': JSON.stringify(env.AI_PRIMARY_MODEL || ''),
-      'process.env.AI_SECONDARY_URL': JSON.stringify(env.AI_SECONDARY_URL || ''),
-      'process.env.AI_SECONDARY_MODEL': JSON.stringify(env.AI_SECONDARY_MODEL || ''),
+    build: {
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/[hash].js',
+          chunkFileNames: 'assets/[hash].js',
+          assetFileNames: 'assets/[hash][extname]',
+        },
+      },
     },
     resolve: {
       alias: {
@@ -39,6 +39,14 @@ export default defineConfig(({mode}) => {
           target: env.AI_SECONDARY_URL || 'https://localhost',
           changeOrigin: true,
           rewrite: (path: string) => path.replace(/^\/api\/ai-proxy/, ''),
+        },
+        '/api/gemini-proxy': {
+          target: 'https://generativelanguage.googleapis.com',
+          changeOrigin: true,
+          rewrite: (p: string) => {
+            const model = p.replace(/^\/api\/gemini-proxy\//, '');
+            return `/v1beta/models/${model}:generateContent?key=${env.AI_PRIMARY_KEY || ''}`;
+          },
         },
       },
     },

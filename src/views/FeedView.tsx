@@ -1,5 +1,5 @@
 import { FC, useState, useRef, useEffect, useCallback, memo } from 'react';
-import { Heart, Share2, MessageCircle, Flame, Clock, TrendingUp, X, ShoppingCart, Monitor, Smartphone, Square, Send, Loader2, BadgeCheck, Download, Copy, Check } from 'lucide-react';
+import { Heart, Share2, MessageCircle, Flame, Clock, TrendingUp, X, ShoppingCart, Monitor, Smartphone, Square, Send, Loader2, BadgeCheck, Download, Copy, Check, Eye } from 'lucide-react';
 import { BannerCarousel } from '../components/BannerCarousel';
 import { CryptoTicker } from '../components/CryptoTicker';
 import { TopCreatorsTicker } from '../components/TopCreatorsTicker';
@@ -71,9 +71,12 @@ export const FeedView: FC<{ posts: Post[]; onViewProfile?: (address: string) => 
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [purchasedIds, setPurchasedIds] = useState<Set<string>>(new Set());
   const [authorProfiles, setAuthorProfiles] = useState<Map<string, db.Profile>>(new Map());
+  const [commentCounts, setCommentCounts] = useState<Map<string, number>>(new Map());
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [sharedBuyCost, setSharedBuyCost] = useState<number>(43);
   const [sharedRemaining, setSharedRemaining] = useState<number>(0);
+  const [followedAuthors, setFollowedAuthors] = useState<Set<string>>(new Set());
+  const [viewCounts, setViewCounts] = useState<Map<string, number>>(new Map());
 
   // Load shared data once (not per card)
   useEffect(() => {
@@ -89,6 +92,7 @@ export const FeedView: FC<{ posts: Post[]; onViewProfile?: (address: string) => 
     if (!wallet) return;
     db.getUserLikedPostIds(wallet).then(setLikedIds);
     db.getUserPurchasedPostIds(wallet).then(setPurchasedIds);
+    db.getFollowing(wallet).then((list) => setFollowedAuthors(new Set(list)));
   }, [wallet]);
 
   // Load posts from Supabase
@@ -123,6 +127,28 @@ export const FeedView: FC<{ posts: Post[]; onViewProfile?: (address: string) => 
         setAuthorProfiles((prev) => {
           const next = new Map(prev);
           profiles.forEach((v, k) => next.set(k, v));
+          return next;
+        });
+      } catch {}
+
+      // Batch-fetch comment counts — one query instead of N
+      try {
+        const ids = mapped.map((p) => p.id);
+        const counts = await db.getCommentCountsBatch(ids);
+        setCommentCounts((prev) => {
+          const next = new Map(prev);
+          counts.forEach((v, k) => next.set(k, v));
+          return next;
+        });
+      } catch {}
+
+      // Batch-fetch view counts
+      try {
+        const ids = mapped.map((p) => p.id);
+        const views = await db.getViewCountsBatch(ids);
+        setViewCounts((prev) => {
+          const next = new Map(prev);
+          views.forEach((v, k) => next.set(k, v));
           return next;
         });
       } catch {}
@@ -305,7 +331,7 @@ export const FeedView: FC<{ posts: Post[]; onViewProfile?: (address: string) => 
           <div className="flex justify-center py-12"><Loader2 className="animate-spin text-zinc-500" size={32} /></div>
         ) : filteredPosts.length > 0 ? (
           filteredPosts.map((post) => (
-            <MemoPostCard key={post.id} post={post} onViewProfile={onViewProfile} isLiked={likedIds.has(post.id)} isPurchased={purchasedIds.has(post.id)} wallet={wallet} authorProfile={authorProfiles.get(post.author)} sharedBuyCost={sharedBuyCost} sharedRemaining={sharedRemaining} onRemainingChange={setSharedRemaining} />
+            <MemoPostCard key={post.id} post={post} onViewProfile={onViewProfile} isLiked={likedIds.has(post.id)} isPurchased={purchasedIds.has(post.id)} wallet={wallet} authorProfile={authorProfiles.get(post.author)} sharedBuyCost={sharedBuyCost} sharedRemaining={sharedRemaining} onRemainingChange={setSharedRemaining} initialCommentCount={commentCounts.get(post.id) || 0} isFollowedByMe={followedAuthors.has(post.author)} onFollowChange={(author, following) => setFollowedAuthors(prev => { const next = new Set(prev); if (following) next.add(author); else next.delete(author); return next; })} viewCount={viewCounts.get(post.id) || 0} onView={(id) => { db.recordView(id, wallet || undefined); }} />
           ))
         ) : (
           <div className="text-center py-12 text-zinc-500">
@@ -334,7 +360,12 @@ const PostCard: FC<{
   sharedBuyCost?: number;
   sharedRemaining?: number;
   onRemainingChange?: (r: number | ((prev: number) => number)) => void;
-}> = ({ post, onViewProfile, isLiked: initialLiked, isPurchased: initialPurchased, wallet, authorProfile, sharedBuyCost = 43, sharedRemaining = 0, onRemainingChange }) => {
+  initialCommentCount?: number;
+  isFollowedByMe?: boolean;
+  onFollowChange?: (author: string, following: boolean) => void;
+  viewCount?: number;
+  onView?: (postId: string) => void;
+}> = ({ post, onViewProfile, isLiked: initialLiked, isPurchased: initialPurchased, wallet, authorProfile, sharedBuyCost = 43, sharedRemaining = 0, onRemainingChange, initialCommentCount = 0, isFollowedByMe = false, onFollowChange, viewCount = 0, onView }) => {
   const { t } = useI18n();
   const { sendTransaction, signTransaction } = useWallet();
   const { connection } = useConnection();
@@ -355,12 +386,16 @@ const PostCard: FC<{
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<db.DbComment[]>([]);
   const [commentText, setCommentText] = useState('');
-  const [commentCount, setCommentCount] = useState(0);
+  const [commentCount, setCommentCount] = useState(initialCommentCount);
+  const isFollowing = isFollowedByMe;
+  const [commenterProfiles, setCommenterProfiles] = useState<Map<string, db.Profile>>(new Map());
   const remaining = sharedRemaining;
   const setRemaining = onRemainingChange || (() => {});
 
   // Author profile: use batch-fetched data, fallback to individual fetch
   const [fetchedProfile, setFetchedProfile] = useState<db.Profile | null>(null);
+  // profileResolved: true once we know for sure whether a profile exists or not
+  const [profileResolved, setProfileResolved] = useState(!!authorProfile);
   const profile = authorProfile || fetchedProfile;
   const authorVerified = !!profile?.verified;
   const authorDisplayName = profile?.display_name || null;
@@ -373,17 +408,30 @@ const PostCard: FC<{
   // Sync purchased state from parent
   useEffect(() => { setPurchased(initialPurchased); }, [initialPurchased]);
 
+  // Mark resolved when batch-fetched authorProfile prop arrives
+  useEffect(() => {
+    if (authorProfile !== undefined) setProfileResolved(true);
+  }, [authorProfile]);
+
   // Fallback: fetch profile individually if not in batch
   useEffect(() => {
     if (!authorProfile) {
-      db.getProfile(post.author).then((p) => { if (p) setFetchedProfile(p); });
+      db.getProfile(post.author).then((p) => { if (p) setFetchedProfile(p); setProfileResolved(true); });
     }
   }, [post.author, authorProfile]);
+
+
+  // Comment count comes from batch fetch in parent — no individual query needed
 
   const loadComments = async () => {
     const data = await db.getComments(post.id);
     setComments(data);
     setCommentCount(data.length);
+    // Fetch commenter profiles
+    const wallets = data.map(c => c.user_wallet);
+    if (wallets.length > 0) {
+      db.getProfilesBatch(wallets).then(setCommenterProfiles);
+    }
   };
 
   // Comment count loaded lazily on first expand only
@@ -400,19 +448,48 @@ const PostCard: FC<{
       setComments((prev) => [...prev, result]);
       setCommentCount((c) => c + 1);
       setCommentText('');
+      if (!commenterProfiles.has(wallet)) {
+        db.getProfile(wallet).then((p) => {
+          if (p) setCommenterProfiles((prev) => new Map(prev).set(wallet, p));
+        });
+      }
     }
+  };
+
+  const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
+
+  const handleFollow = async () => {
+    if (!wallet) return;
+    if (isFollowing) {
+      setShowUnfollowConfirm(true);
+      return;
+    }
+    onFollowChange?.(post.author, true);
+    await db.followUser(wallet, post.author);
+  };
+
+  const confirmUnfollow = async () => {
+    setShowUnfollowConfirm(false);
+    onFollowChange?.(post.author, false);
+    await db.unfollowUser(wallet, post.author);
   };
 
   const handleLike = async () => {
     if (!wallet) return;
     if (liked) {
+      // Optimistic: update UI immediately
+      setLiked(false);
+      setLikes((l) => l - 1);
+      setRemaining((r) => r + 1);
+      setLikeError('');
       const ok = await db.unlikePost(wallet, post.id);
       if (ok) {
-        setLikes((l) => l - 1);
-        setLiked(false);
-        setLikeError('');
         db.refundDailyLike(wallet);
-        setRemaining((r) => r + 1);
+      } else {
+        // Revert on failure
+        setLiked(true);
+        setLikes((l) => l + 1);
+        setRemaining((r) => r - 1);
       }
     } else {
       if (remaining <= 0) {
@@ -420,18 +497,28 @@ const PostCard: FC<{
         setTimeout(() => setLikeError(''), 3000);
         return;
       }
+      // Optimistic: update UI immediately
+      setLiked(true);
+      setLikes((l) => l + 1);
+      setRemaining((r) => r - 1);
+      setLikeError('');
       const canConsume = await db.consumeDailyLike(wallet);
       if (!canConsume) {
+        // Revert
+        setLiked(false);
+        setLikes((l) => l - 1);
+        setRemaining((r) => r + 1);
         setLikeError(t('likes.noLikes'));
         setTimeout(() => setLikeError(''), 3000);
         return;
       }
       const ok = await db.likePost(wallet, post.id);
-      if (ok) {
-        setLikes((l) => l + 1);
-        setLiked(true);
-        setRemaining((r) => r - 1);
-        setLikeError('');
+      if (!ok) {
+        // Revert
+        setLiked(false);
+        setLikes((l) => l - 1);
+        setRemaining((r) => r + 1);
+        db.refundDailyLike(wallet);
       }
     }
   };
@@ -560,6 +647,21 @@ const PostCard: FC<{
     setShowShareMenu(false);
   };
 
+  // Track post views via IntersectionObserver
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || !onView) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        onView(post.id);
+        obs.disconnect();
+      }
+    }, { threshold: 0.5 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [post.id, onView]);
+
   // Responsive image: cap 9:16 images so they don't take over the whole screen
   const getImageStyle = () => {
     if (post.aspectRatio === '16:9') return { aspectRatio: '16/9' };
@@ -569,19 +671,25 @@ const PostCard: FC<{
   };
 
   return (
-    <div className="bg-zinc-900/50 rounded-3xl overflow-hidden border border-zinc-800/50 shadow-xl backdrop-blur-sm">
+    <div ref={cardRef} className="bg-zinc-900/50 rounded-3xl overflow-hidden border border-zinc-800/50 shadow-xl backdrop-blur-sm">
       <div className="p-3 sm:p-4 flex items-center justify-between gap-2">
         <button
           onClick={() => onViewProfile?.(post.author)}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity min-w-0 flex-1"
         >
-          {authorAvatar ? (
+          {!profileResolved ? (
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-zinc-800 animate-pulse shrink-0" />
+          ) : authorAvatar ? (
             <img src={authorAvatar} alt="" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-zinc-700 shrink-0" referrerPolicy="no-referrer" />
           ) : (
             <SolanaAvatar size={28} />
           )}
           <div className="flex items-center gap-1 min-w-0">
-            <span className="text-xs sm:text-sm text-zinc-300 truncate max-w-[120px] sm:max-w-[180px]">{getProfileDisplayName(profile, post.author)}</span>
+            {!profileResolved ? (
+              <div className="h-3 w-20 bg-zinc-800 rounded animate-pulse" />
+            ) : (
+              <span className="text-xs sm:text-sm text-zinc-300 truncate max-w-[120px] sm:max-w-[180px]">{getProfileDisplayName(profile, post.author)}</span>
+            )}
             {authorVerified && <BadgeCheck size={14} className="text-blue-400 shrink-0" />}
             {profile?.twitter && (
               <a
@@ -596,19 +704,19 @@ const PostCard: FC<{
             )}
           </div>
         </button>
-        <div className="flex items-center gap-2 shrink-0">
-          {post.createdAt && (
-            <span className="text-[9px] sm:text-[10px] text-zinc-600 whitespace-nowrap">
-              {new Date(post.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}{' '}
-              {new Date(post.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          {post.category && (
-            <span className="text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-zinc-800 text-zinc-300 whitespace-nowrap">
-              {post.category}
-            </span>
-          )}
-        </div>
+        {wallet && wallet !== post.author && (
+          isFollowing ? (
+            <button onClick={handleFollow} className="text-zinc-400 bg-zinc-800 rounded-full px-3 py-1 text-xs shrink-0">
+              Following
+            </button>
+          ) : (
+            <div className="create-btn-spin p-[1.5px] rounded-full shrink-0">
+              <button onClick={handleFollow} className="bg-indigo-600 text-white rounded-full px-3 py-1 text-xs font-medium">
+                Follow
+              </button>
+            </div>
+          )
+        )}
       </div>
       
       <div
@@ -637,6 +745,15 @@ const PostCard: FC<{
               <MessageCircle size={20} className="sm:w-[22px] sm:h-[22px]" />
               <span className="font-medium text-xs sm:text-sm">{commentCount || t('feed.reply')}</span>
             </button>
+            {viewCount > 0 && (
+              <span className="flex items-center gap-1 text-zinc-500">
+                <Eye size={18} className="sm:w-[20px] sm:h-[20px]" />
+                <span className="text-xs sm:text-sm">{viewCount}</span>
+              </span>
+            )}
+            {post.category && (
+              <span className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">{post.category}</span>
+            )}
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {wallet && !purchased ? (
@@ -655,11 +772,14 @@ const PostCard: FC<{
             </button>
           </div>
         </div>
+        {post.createdAt && (
+          <span className="text-[10px] text-zinc-500">{new Date(post.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} {new Date(post.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+        )}
 
         {likeError && (
           <p className="text-xs text-red-400 text-center">{likeError}</p>
         )}
-        {wallet && !liked && (
+        {wallet && (
           <p className="text-[10px] text-zinc-500 text-center">
             {t('likes.remaining', { count: remaining })}
           </p>
@@ -676,23 +796,32 @@ const PostCard: FC<{
             
             {comments.length > 0 ? (
               <div className="space-y-2 max-h-48 overflow-y-auto hide-scrollbar">
-                {comments.map((c) => (
-                  <div key={c.id} className="flex gap-2">
-                    <button
-                      onClick={() => onViewProfile?.(c.user_wallet)}
-                      className="shrink-0 hover:scale-110 transition-transform"
-                    >
-                      <SolanaAvatar size={24} />
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-[11px] font-medium text-zinc-300">{shortAddr(c.user_wallet)}</span>
-                        <span className="text-[9px] text-zinc-600">{new Date(c.created_at).toLocaleDateString()}</span>
+                {comments.map((c) => {
+                  const cp = commenterProfiles.get(c.user_wallet);
+                  const cpAvatar = cp ? (getTwitterAvatarUrl(cp.twitter) || cp.avatar_url || null) : null;
+                  return (
+                    <div key={c.id} className="flex gap-2">
+                      <button
+                        onClick={() => onViewProfile?.(c.user_wallet)}
+                        className="shrink-0 hover:scale-110 transition-transform"
+                      >
+                        {cpAvatar ? (
+                          <img src={cpAvatar} alt="" className="w-6 h-6 rounded-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <SolanaAvatar size={24} />
+                        )}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-[11px] font-medium text-zinc-300">{cp ? getProfileDisplayName(cp, c.user_wallet) : shortAddr(c.user_wallet)}</span>
+                          {cp?.verified && <BadgeCheck size={10} className="text-blue-400 shrink-0" />}
+                          <span className="text-[9px] text-zinc-600">{new Date(c.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-xs text-zinc-400 break-words">{c.text.length > 500 ? c.text.slice(0, 500) + '…' : c.text}</p>
                       </div>
-                      <p className="text-xs text-zinc-400 break-words">{c.text}</p>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-zinc-600 text-center py-2">{t('comments.empty')}</p>
@@ -706,6 +835,7 @@ const PostCard: FC<{
                   onChange={(e) => setCommentText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
                   placeholder={t('comments.placeholder')}
+                  maxLength={500}
                   className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 transition-colors"
                 />
                 <button
@@ -722,6 +852,19 @@ const PostCard: FC<{
       </div>
 
       {/* Share Menu Modal */}
+      {showUnfollowConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowUnfollowConfirm(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 max-w-[260px] w-full space-y-3" onClick={(e: any) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-zinc-100 text-center">Unfollow?</p>
+            <p className="text-xs text-zinc-400 text-center">You will no longer follow this creator</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowUnfollowConfirm(false)} className="flex-1 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-medium hover:bg-zinc-700 transition-colors">Cancel</button>
+              <button onClick={confirmUnfollow} className="flex-1 py-2 rounded-xl bg-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/30 transition-colors">Unfollow</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showShareMenu && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowShareMenu(false)}>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-[280px] p-3 space-y-2" onClick={(e) => e.stopPropagation()}>

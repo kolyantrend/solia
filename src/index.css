@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+@keyframes spin-border {
+  from { --angle: 0deg; }
+  to   { --angle: 360deg; }
+}
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.create-btn-spin {
+  background: conic-gradient(from var(--angle), #6366f1, #a855f7, #ec4899, #6366f1) border-box;
+  animation: spin-border 2s linear infinite;
+}
+.create-btn-inner {
+  background: #4f46e5;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /*
  * Solana-style Theme System
  * Override Tailwind's zinc palette based on data-theme attribute.
@@ -8,10 +29,10 @@
 
 :root,
 [data-theme="dark"] {
-  --color-zinc-950: #0c0a1d;
-  --color-zinc-900: #14102e;
-  --color-zinc-800: #211a45;
-  --color-zinc-700: #312660;
+  --color-zinc-950: #08061a;
+  --color-zinc-900: #1c1640;
+  --color-zinc-800: #2a2258;
+  --color-zinc-700: #372e6e;
   --color-zinc-600: #4a3d7a;
   --color-zinc-500: #6e60a0;
   --color-zinc-400: #9488b8;
@@ -19,6 +40,14 @@
   --color-zinc-200: #d6cfe5;
   --color-zinc-100: #ebe8f3;
   --color-zinc-50: #f6f4fa;
+}
+
+/* Dark mode card separation: subtle border on zinc-900 elements */
+[data-theme="dark"] .bg-zinc-900\/60,
+[data-theme="dark"] .bg-zinc-900\/80,
+[data-theme="dark"] .bg-zinc-900\/50,
+[data-theme="dark"] .bg-zinc-900 {
+  border: 1px solid rgba(255, 255, 255, 0.055);
 }
 
 [data-theme="light"] {
@@ -64,6 +93,7 @@
 
 .animate-scroll-x-reverse {
   animation: scroll-x-reverse 45s linear infinite;
+  will-change: transform;
 }
 
 .animate-scroll-x-reverse:hover {

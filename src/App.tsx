@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { WalletContextProvider } from './components/WalletContextProvider';
 import { Layout } from './components/Layout';
 import { FeedView, Post } from './views/FeedView';
-import { GenerateView } from './views/GenerateView';
-import { LeaderboardView } from './views/LeaderboardView';
-import { ProfileView } from './views/ProfileView';
-import { StatsView } from './views/StatsView';
-import { TermsView } from './views/TermsView';
-import { PrivacyView } from './views/PrivacyView';
-import { LicenseView } from './views/LicenseView';
+
+const GenerateView = lazy(() => import('./views/GenerateView').then(m => ({ default: m.GenerateView })));
+const LeaderboardView = lazy(() => import('./views/LeaderboardView').then(m => ({ default: m.LeaderboardView })));
+const ProfileView = lazy(() => import('./views/ProfileView').then(m => ({ default: m.ProfileView })));
+const StatsView = lazy(() => import('./views/StatsView').then(m => ({ default: m.StatsView })));
+const TermsView = lazy(() => import('./views/TermsView').then(m => ({ default: m.TermsView })));
+const PrivacyView = lazy(() => import('./views/PrivacyView').then(m => ({ default: m.PrivacyView })));
+const LicenseView = lazy(() => import('./views/LicenseView').then(m => ({ default: m.LicenseView })));
 import { Key, ArrowLeft } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n';
 import { ThemeProvider } from './theme';
@@ -84,6 +85,10 @@ function AppInner() {
     if (path === '/license') return 'license';
     return null;
   });
+  const isDirectLegalAccess = useRef(
+    ['terms', 'privacy', 'license'].includes(window.location.pathname.slice(1)) &&
+    document.referrer === ''
+  );
 
   useEffect(() => {
     const checkKey = async () => {
@@ -153,16 +158,18 @@ function AppInner() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // Direct URL access to /terms, /privacy, /license — render standalone (no app shell, no wallet needed)
-  if (legalPage && window.location.pathname === `/${legalPage}`) {
+  // Direct URL access only (typed in address bar, not navigated from app)
+  if (legalPage && isDirectLegalAccess.current) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-50">
-        {legalPage === 'terms'
-          ? <TermsView />
-          : legalPage === 'privacy'
-          ? <PrivacyView />
-          : <LicenseView />
-        }
+        <Suspense fallback={null}>
+          {legalPage === 'terms'
+            ? <TermsView onBack={handleBackFromLegal} />
+            : legalPage === 'privacy'
+            ? <PrivacyView onBack={handleBackFromLegal} />
+            : <LicenseView onBack={handleBackFromLegal} />
+          }
+        </Suspense>
       </div>
     );
   }
@@ -197,11 +204,14 @@ function AppInner() {
   }
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={handleSetActiveTab}>
+    <Layout activeTab={activeTab} setActiveTab={handleSetActiveTab} onViewProfile={handleViewProfile} onOpenLegal={handleOpenLegal}>
+      <Suspense fallback={null}>
         {legalPage ? (
           legalPage === 'terms'
             ? <TermsView onBack={handleBackFromLegal} />
-            : <PrivacyView onBack={handleBackFromLegal} />
+            : legalPage === 'privacy'
+            ? <PrivacyView onBack={handleBackFromLegal} />
+            : <LicenseView onBack={handleBackFromLegal} />
         ) : viewingProfile ? (
           <>
             <div className="px-4 pt-3">
@@ -222,13 +232,17 @@ function AppInner() {
         ) : (
           <>
             {activeTab === 'feed' && <FeedView posts={posts} onViewProfile={handleViewProfile} />}
-            {activeTab === 'generate' && <GenerateView onGenerate={handleGenerate} />}
+            {/* GenerateView stays mounted (hidden) so generation survives tab switches */}
+            <div style={{ display: activeTab === 'generate' ? undefined : 'none' }}>
+              <GenerateView onGenerate={handleGenerate} />
+            </div>
             {activeTab === 'leaderboard' && <LeaderboardView onViewProfile={handleViewProfile} />}
             {activeTab === 'stats' && <StatsView onViewProfile={handleViewProfile} />}
             {activeTab === 'profile' && <ProfileView onViewProfile={handleViewProfile} onOpenLegal={handleOpenLegal} />}
           </>
         )}
-      </Layout>
+      </Suspense>
+    </Layout>
   );
 }
 

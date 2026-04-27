@@ -3,7 +3,7 @@ import { BadgeCheck } from 'lucide-react';
 import { getTopGenerators12h } from '../lib/database';
 import { TREASURY_WALLET } from '../lib/solana';
 import { SolanaAvatar } from './SolanaAvatar';
-import { getTwitterAvatarUrl, extractTwitterUsername } from '../lib/utils';
+import { getTwitterAvatarUrl, getProfileDisplayName } from '../lib/utils';
 
 interface TopCreator {
   wallet: string;
@@ -30,12 +30,20 @@ const PLACEHOLDERS: TopCreator[] = Array.from({ length: 6 }, (_, i) => ({
 }));
 
 export const TopCreatorsTicker: FC<{ onViewProfile?: (address: string) => void }> = ({ onViewProfile }) => {
-  const [creators, setCreators] = useState<TopCreator[]>([]);
+  const [creators, setCreators] = useState<TopCreator[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('solia_top_creators');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
 
   useEffect(() => {
-    const fetch = () => getTopGenerators12h().then(data => setCreators(data)).catch(() => {});
-    fetch();
-    const interval = setInterval(fetch, 120000);
+    const load = () => getTopGenerators12h().then(data => {
+      setCreators(data);
+      try { sessionStorage.setItem('solia_top_creators', JSON.stringify(data)); } catch {}
+    }).catch(() => {});
+    load();
+    const interval = setInterval(load, 120000);
     return () => clearInterval(interval);
   }, []);
 
@@ -98,7 +106,7 @@ export const TopCreatorsTicker: FC<{ onViewProfile?: (address: string) => void }
               })()}
               <div className="flex flex-col items-start">
                 <div className="flex items-center gap-0.5">
-                  <span className="text-[11px] font-semibold text-zinc-200 leading-tight">{creator.display_name || (creator.twitter ? (extractTwitterUsername(creator.twitter) || shortAddr(creator.wallet)) : shortAddr(creator.wallet))}</span>
+                  <span className="text-[11px] font-semibold text-zinc-200 leading-tight">{getProfileDisplayName(creator)}</span>
                   {creator.verified && <BadgeCheck size={10} className="text-blue-400 shrink-0" />}
                 </div>
                 <span className="text-[9px] text-indigo-400 font-medium leading-tight">

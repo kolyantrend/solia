@@ -5,7 +5,7 @@ import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { TREASURY_WALLET } from '../lib/solana';
 import * as db from '../lib/database';
 import { SolanaAvatar } from '../components/SolanaAvatar';
-import { getTwitterAvatarUrl, extractTwitterUsername } from '../lib/utils';
+import { getTwitterAvatarUrl, extractTwitterUsername, getProfileDisplayName } from '../lib/utils';
 import { BannerCarousel } from '../components/BannerCarousel';
 import { PROMO_BANNERS } from '../config/banners';
 
@@ -47,7 +47,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
   const [topReferrers, setTopReferrers] = useState<{ wallet: string; creator_count: number }[]>([]);
   const [topFollowers, setTopFollowers] = useState<{ wallet: string; follower_count: number }[]>([]);
   const [followerProfiles, setFollowerProfiles] = useState<Map<string, { twitter: string; display_name: string | null; avatar_url: string | null; verified: boolean }>>(new Map());
-  const [referrerProfiles, setReferrerProfiles] = useState<Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null }>>(new Map());
+  const [referrerProfiles, setReferrerProfiles] = useState<Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null; avatar_url: string | null }>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,9 +76,9 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
       if (refs.length > 0) {
         try {
           const profiles = await db.getProfilesBatch(refs.map(r => r.wallet));
-          const map = new Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null }>();
+          const map = new Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null; avatar_url: string | null }>();
           profiles.forEach((p, wallet) => {
-            map.set(wallet, { twitter: p.twitter || '', telegram: p.telegram || '', youtube: p.youtube || '', display_name: p.display_name || null });
+            map.set(wallet, { twitter: p.twitter || '', telegram: p.telegram || '', youtube: p.youtube || '', display_name: p.display_name || null, avatar_url: p.avatar_url || null });
           });
           setReferrerProfiles(map);
         } catch {}
@@ -147,7 +147,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
   };
 
   return (
-    <div className="flex flex-col gap-6 p-4 pb-24 max-w-md mx-auto w-full">
+    <div className="flex flex-col gap-6 p-4 pb-24 max-w-md lg:max-w-2xl mx-auto w-full">
       <BannerCarousel banners={PROMO_BANNERS} />
 
       <div className="text-center space-y-1">
@@ -270,7 +270,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
                       ) : (
                         <SolanaAvatar size={24} />
                       )}
-                      <span className="font-mono text-sm text-zinc-200">{prof?.display_name || (prof?.twitter ? extractTwitterUsername(prof.twitter) : shortAddr(item.wallet))}</span>
+                      <span className="font-mono text-sm text-zinc-200">{getProfileDisplayName(prof ? { ...prof, wallet: item.wallet } : null, item.wallet)}</span>
                       {prof?.verified && <BadgeCheck size={14} className="text-blue-400 shrink-0" />}
                       {prof?.twitter && (
                         <a href={prof.twitter.startsWith('http') ? prof.twitter : `https://x.com/${prof.twitter}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-blue-400 transition-colors">
@@ -330,7 +330,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
                       ) : (
                         <SolanaAvatar size={24} />
                       )}
-                      <span className="font-mono text-sm text-zinc-200">{prof?.display_name || (prof?.twitter ? extractTwitterUsername(prof.twitter) : shortAddr(ref.wallet))}</span>
+                      <span className="font-mono text-sm text-zinc-200">{getProfileDisplayName(prof ? { ...prof, wallet: ref.wallet } : null, ref.wallet)}</span>
                       {prof?.twitter && (
                         <a href={prof.twitter.startsWith('http') ? prof.twitter : `https://x.com/${prof.twitter}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-blue-400 transition-colors">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
@@ -393,7 +393,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
                         <SolanaAvatar size={24} />
                       );
                     })()}
-                    <span className="font-mono text-sm text-zinc-200">{user.display_name || (user.twitter ? (extractTwitterUsername(user.twitter) || shortAddr(user.address)) : shortAddr(user.address))}</span>
+                    <span className="font-mono text-sm text-zinc-200">{getProfileDisplayName({ display_name: user.display_name, twitter: user.twitter, wallet: user.address })}</span>
                     {user.verified && <BadgeCheck size={14} className="text-blue-400 shrink-0" />}
                     {user.twitter && (
                       <a href={user.twitter.startsWith('http') ? user.twitter : `https://x.com/${user.twitter}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-blue-400 transition-colors">

@@ -478,20 +478,22 @@ const BASE_DAILY_LIKES = 2;
 export async function getDailyLikes(wallet: string): Promise<{ used: number; bonus: number; remaining: number }> {
   if (!isSupabaseConfigured) return { used: 0, bonus: 0, remaining: BASE_DAILY_LIKES };
   try {
-    const today = new Date().toISOString().split('T')[0];
     const { data } = await supabase
       .from('daily_likes')
-      .select('*')
-      .eq('user_wallet', wallet)
-      .eq('date', today)
-      .maybeSingle();
+      .select('bonus_count, used_count')
+      .eq('user_wallet', wallet);
 
-    if (!data) {
+    if (!data || data.length === 0) {
       return { used: 0, bonus: 0, remaining: BASE_DAILY_LIKES };
     }
-    const total = BASE_DAILY_LIKES + (data.bonus_count || 0);
-    const remaining = Math.max(0, total - (data.used_count || 0));
-    return { used: data.used_count || 0, bonus: data.bonus_count || 0, remaining };
+    let totalBonus = 0;
+    let totalUsed = 0;
+    for (const row of data) {
+      totalBonus += row.bonus_count || 0;
+      totalUsed += row.used_count || 0;
+    }
+    const remaining = Math.max(0, BASE_DAILY_LIKES + totalBonus - totalUsed);
+    return { used: totalUsed, bonus: totalBonus, remaining };
   } catch { return { used: 0, bonus: 0, remaining: BASE_DAILY_LIKES }; }
 }
 
@@ -499,9 +501,25 @@ export async function consumeDailyLike(wallet: string): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
   try {
     const today = new Date().toISOString().split('T')[0];
+
+    // Check global remaining across all days
+    const { data: allRows } = await supabase
+      .from('daily_likes')
+      .select('bonus_count, used_count')
+      .eq('user_wallet', wallet);
+
+    let totalBonus = 0;
+    let totalUsed = 0;
+    for (const row of allRows || []) {
+      totalBonus += row.bonus_count || 0;
+      totalUsed += row.used_count || 0;
+    }
+    if (totalUsed >= BASE_DAILY_LIKES + totalBonus) return false;
+
+    // Increment today's used_count (create record if needed)
     const { data: existing } = await supabase
       .from('daily_likes')
-      .select('*')
+      .select('used_count')
       .eq('user_wallet', wallet)
       .eq('date', today)
       .maybeSingle();
@@ -512,9 +530,6 @@ export async function consumeDailyLike(wallet: string): Promise<boolean> {
         .insert({ user_wallet: wallet, date: today, used_count: 1, bonus_count: 0 });
       return !error;
     }
-
-    const total = BASE_DAILY_LIKES + (existing.bonus_count || 0);
-    if (existing.used_count >= total) return false;
 
     const { error } = await supabase
       .from('daily_likes')
@@ -593,6 +608,34 @@ export async function getComments(postId: string): Promise<DbComment[]> {
       .order('created_at', { ascending: true });
     return data || [];
   } catch { return []; }
+}
+
+export async function getCommentCount(postId: string): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+  try {
+    const { count } = await supabase
+      .from('comments')
+      .select('*', { count: 'exact', head: true })
+      .eq('post_id', postId);
+    return count || 0;
+  } catch { return 0; }
+}
+
+export async function getCommentCountsBatch(postIds: string[]): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (!isSupabaseConfigured || postIds.length === 0) return result;
+  try {
+    const { data } = await supabase
+      .from('comments')
+      .select('post_id')
+      .in('post_id', postIds);
+    if (data) {
+      for (const row of data) {
+        result.set(row.post_id, (result.get(row.post_id) || 0) + 1);
+      }
+    }
+  } catch {}
+  return result;
 }
 
 export async function addComment(wallet: string, postId: string, text: string): Promise<DbComment | null> {
@@ -753,7 +796,13 @@ export async function getTopByFollowers(limit = 50): Promise<{ wallet: string; f
 export async function getLeaderboard(periodHours?: number): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; telegram: string; youtube: string; verified: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    // Fetch all posts (paginated to avoid Supabase 1000-row default limit)
+    // Fetch all verified profiles
+    const { data: verifiedProfiles } = await supabase
+      .from('profiles')
+      .select('wallet, avatar_url, twitter, telegram, youtube, verified, display_name')
+      .eq('verified', true);
+
+    // Fetch all posts (paginated)
     let allPosts: { author: string; likes_count: number }[] = [];
     let from = 0;
     const PAGE = 1000;
@@ -770,42 +819,58 @@ export async function getLeaderboard(periodHours?: number): Promise<{ wallet: st
       from += PAGE;
     }
 
-    if (allPosts.length === 0) return [];
-
-    const map = new Map<string, { generations: number; total_likes: number }>();
+    const statsMap = new Map<string, { generations: number; total_likes: number }>();
     for (const p of allPosts) {
-      const existing = map.get(p.author) || { generations: 0, total_likes: 0 };
+      const existing = statsMap.get(p.author) || { generations: 0, total_likes: 0 };
       existing.generations += 1;
       existing.total_likes += p.likes_count || 0;
-      map.set(p.author, existing);
+      statsMap.set(p.author, existing);
     }
 
-    const top = Array.from(map.entries())
-      .map(([wallet, stats]) => ({ wallet, ...stats }))
+    // Non-verified authors from posts (not in verified list)
+    const verifiedWallets = new Set((verifiedProfiles || []).map(p => p.wallet));
+    const nonVerifiedEntries = Array.from(statsMap.entries())
+      .filter(([wallet]) => !verifiedWallets.has(wallet))
+      .map(([wallet, stats]) => ({ wallet, ...stats, avatar_url: null, twitter: '', telegram: '', youtube: '', verified: false, display_name: null }));
+
+    // Fetch profiles for non-verified authors
+    const nonVerifiedWallets = nonVerifiedEntries.map(e => e.wallet);
+    if (nonVerifiedWallets.length > 0) {
+      const { data: nvProfiles } = await supabase
+        .from('profiles')
+        .select('wallet, avatar_url, twitter, telegram, youtube, display_name')
+        .in('wallet', nonVerifiedWallets);
+      if (nvProfiles) {
+        const nvMap = new Map(nvProfiles.map(p => [p.wallet, p]));
+        nonVerifiedEntries.forEach(e => {
+          const p = nvMap.get(e.wallet);
+          if (p) {
+            e.avatar_url = p.avatar_url || null;
+            e.twitter = p.twitter || '';
+            e.telegram = p.telegram || '';
+            e.youtube = p.youtube || '';
+            e.display_name = p.display_name || null;
+          }
+        });
+      }
+    }
+
+    // Verified users: merge with stats (0 if no posts)
+    const verifiedEntries = (verifiedProfiles || []).map(p => ({
+      wallet: p.wallet,
+      generations: statsMap.get(p.wallet)?.generations || 0,
+      total_likes: statsMap.get(p.wallet)?.total_likes || 0,
+      avatar_url: p.avatar_url || null,
+      twitter: p.twitter || '',
+      telegram: p.telegram || '',
+      youtube: p.youtube || '',
+      verified: true,
+      display_name: p.display_name || null,
+    }));
+
+    return [...verifiedEntries, ...nonVerifiedEntries]
       .sort((a, b) => b.generations - a.generations)
       .slice(0, 50);
-
-    // Fetch avatars for leaderboard users
-    const wallets = top.map((t) => t.wallet);
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('wallet, avatar_url, twitter, telegram, youtube, verified, display_name')
-      .in('wallet', wallets);
-
-    const profileMap = new Map<string, { avatar_url: string | null; twitter: string; telegram: string; youtube: string; verified: boolean; display_name: string | null }>();
-    for (const p of profiles || []) {
-      profileMap.set(p.wallet, { avatar_url: p.avatar_url, twitter: p.twitter || '', telegram: p.telegram || '', youtube: p.youtube || '', verified: !!p.verified, display_name: p.display_name || null });
-    }
-
-    return top.map((t) => ({
-      ...t,
-      avatar_url: profileMap.get(t.wallet)?.avatar_url || null,
-      twitter: profileMap.get(t.wallet)?.twitter || '',
-      telegram: profileMap.get(t.wallet)?.telegram || '',
-      youtube: profileMap.get(t.wallet)?.youtube || '',
-      verified: profileMap.get(t.wallet)?.verified || false,
-      display_name: profileMap.get(t.wallet)?.display_name || null,
-    }));
   } catch { return []; }
 }
 
@@ -816,64 +881,38 @@ export async function getLeaderboard(periodHours?: number): Promise<{ wallet: st
 export async function getTopGenerators12h(): Promise<{ wallet: string; count: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    // Try 24h first, fallback to all-time if too few results
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    let allData: { author: string }[] = [];
-    let from = 0;
-    const PAGE = 1000;
-    while (true) {
-      const { data } = await supabase.from('posts').select('author').gte('created_at', since24h).range(from, from + PAGE - 1);
-      if (!data || data.length === 0) break;
-      allData = allData.concat(data);
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-
-    // Fallback to all-time if fewer than 3 creators in 24h
-    const uniqueAuthors24h = new Set(allData.map(p => p.author));
-    if (uniqueAuthors24h.size < 3) {
-      allData = [];
-      from = 0;
-      while (true) {
-        const { data } = await supabase.from('posts').select('author').range(from, from + PAGE - 1);
-        if (!data || data.length === 0) break;
-        allData = allData.concat(data);
-        if (data.length < PAGE) break;
-        from += PAGE;
-      }
-    }
-
-    if (allData.length === 0) return [];
-
-    const map = new Map<string, number>();
-    for (const p of allData) {
-      map.set(p.author, (map.get(p.author) || 0) + 1);
-    }
-
-    const top = Array.from(map.entries())
-      .map(([wallet, count]) => ({ wallet, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
-
-    // Fetch avatars for top creators
-    const wallets = top.map((t) => t.wallet);
-    const { data: profiles } = await supabase
+    // Fetch all verified profiles
+    const { data: verifiedProfiles } = await supabase
       .from('profiles')
-      .select('wallet, avatar_url, twitter, telegram, youtube, verified, display_name')
-      .in('wallet', wallets);
+      .select('wallet, avatar_url, twitter, verified, display_name')
+      .eq('verified', true);
 
-    const profileMap = new Map<string, { avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }>();
-    for (const p of profiles || []) {
-      profileMap.set(p.wallet, { avatar_url: p.avatar_url, twitter: p.twitter || '', verified: !!p.verified, display_name: p.display_name || null });
+    if (!verifiedProfiles || verifiedProfiles.length === 0) return [];
+
+    // Count posts per verified wallet (all-time)
+    const verifiedWallets = verifiedProfiles.map(p => p.wallet);
+    const { data: posts } = await supabase
+      .from('posts')
+      .select('author')
+      .in('author', verifiedWallets);
+
+    const countMap = new Map<string, number>();
+    for (const p of posts || []) {
+      countMap.set(p.author, (countMap.get(p.author) || 0) + 1);
     }
 
-    return top.map((t) => ({
-      ...t,
-      avatar_url: profileMap.get(t.wallet)?.avatar_url || null,
-      twitter: profileMap.get(t.wallet)?.twitter || '',
-      verified: profileMap.get(t.wallet)?.verified || false,
-      display_name: profileMap.get(t.wallet)?.display_name || null,
-    }));
+    // Build result: all verified users, sorted by post count desc, 0 if none
+    return verifiedProfiles
+      .map(p => ({
+        wallet: p.wallet,
+        count: countMap.get(p.wallet) || 0,
+        avatar_url: p.avatar_url || null,
+        twitter: p.twitter || '',
+        verified: true,
+        display_name: p.display_name || null,
+      }))
+      .filter(p => p.count > 0)
+      .sort((a, b) => b.count - a.count);
   } catch { return []; }
 }
 
@@ -1303,6 +1342,55 @@ export async function recordTransaction(record: TransactionRecord): Promise<bool
   } catch { return false; }
 }
 
+// ========================
+// AI CONFIG (admin model switcher)
+// ========================
+
+export interface AiConfig {
+  primary_provider: 'gemini' | 'replicate';
+  primary_model: string;
+  secondary_provider: 'gemini' | 'replicate';
+  secondary_model: string;
+}
+
+const AI_CONFIG_DEFAULTS: AiConfig = {
+  primary_provider: 'gemini',
+  primary_model: 'gemini-3.1-flash-image-preview',
+  secondary_provider: 'replicate',
+  secondary_model: 'google/nano-banana-pro',
+};
+
+// Cache config for 30s so not every generation hits DB
+let aiConfigCache: { config: AiConfig; ts: number } | null = null;
+const AI_CONFIG_TTL = 30_000;
+
+export async function getAiConfig(): Promise<AiConfig> {
+  if (aiConfigCache && Date.now() - aiConfigCache.ts < AI_CONFIG_TTL) return aiConfigCache.config;
+  if (!isSupabaseConfigured) return AI_CONFIG_DEFAULTS;
+  try {
+    const { data } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'ai_models')
+      .maybeSingle();
+    const config = data?.value ? { ...AI_CONFIG_DEFAULTS, ...data.value } : AI_CONFIG_DEFAULTS;
+    aiConfigCache = { config, ts: Date.now() };
+    return config;
+  } catch (e) { console.warn('getAiConfig:', e); return AI_CONFIG_DEFAULTS; }
+}
+
+export async function setAiConfig(config: AiConfig): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { error } = await supabase
+      .from('app_config')
+      .upsert({ key: 'ai_models', value: config }, { onConflict: 'key' });
+    if (error) { console.warn('setAiConfig:', error); return false; }
+    aiConfigCache = { config, ts: Date.now() };
+    return true;
+  } catch { return false; }
+}
+
 export async function getTransactionHistory(
   wallet: string,
   limit = 20,
@@ -1320,4 +1408,40 @@ export async function getTransactionHistory(
     if (error) { console.warn('getTransactionHistory:', error); return { items: [], total: 0 }; }
     return { items: (data || []) as TransactionHistoryEntry[], total: count || 0 };
   } catch (e) { console.warn('getTransactionHistory:', e); return { items: [], total: 0 }; }
+}
+
+// ========================
+// POST VIEWS
+// ========================
+
+const viewedPosts = new Set<string>();
+
+export async function recordView(postId: string, viewerWallet?: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const key = `${postId}_${viewerWallet || 'anon'}`;
+  if (viewedPosts.has(key)) return;
+  viewedPosts.add(key);
+  try {
+    await supabase.from('post_views').insert({
+      post_id: postId,
+      viewer_wallet: viewerWallet || null,
+    });
+  } catch {}
+}
+
+export async function getViewCountsBatch(postIds: string[]): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (!isSupabaseConfigured || postIds.length === 0) return result;
+  try {
+    const { data } = await supabase
+      .from('post_views')
+      .select('post_id')
+      .in('post_id', postIds);
+    if (data) {
+      for (const row of data) {
+        result.set(row.post_id, (result.get(row.post_id) || 0) + 1);
+      }
+    }
+  } catch {}
+  return result;
 }

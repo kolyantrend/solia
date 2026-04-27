@@ -8,7 +8,7 @@ export const BannerCarousel: FC<{ banners?: BannerConfig[] }> = ({ banners: cust
   const [isTransitioning, setIsTransitioning] = useState(false);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
-  const swiped = useRef(false);
+  const wasSwiped = useRef(false);
 
   const goTo = useCallback((index: number) => {
     if (isTransitioning) return;
@@ -32,7 +32,8 @@ export const BannerCarousel: FC<{ banners?: BannerConfig[] }> = ({ banners: cust
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
-    swiped.current = false;
+    touchEndX.current = e.touches[0].clientX;
+    wasSwiped.current = false;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -41,11 +42,17 @@ export const BannerCarousel: FC<{ banners?: BannerConfig[] }> = ({ banners: cust
 
   const handleTouchEnd = () => {
     const diff = touchStartX.current - touchEndX.current;
-    const threshold = 40;
-    if (Math.abs(diff) > threshold && !swiped.current) {
-      swiped.current = true;
+    if (Math.abs(diff) > 40) {
+      wasSwiped.current = true;
       if (diff > 0) next();
       else prev();
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (wasSwiped.current) {
+      e.preventDefault();
+      wasSwiped.current = false;
     }
   };
 
@@ -56,26 +63,21 @@ export const BannerCarousel: FC<{ banners?: BannerConfig[] }> = ({ banners: cust
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="relative aspect-[3/1] w-full bg-zinc-900">
-        {banners.map((banner, idx) => (
-          <a
-            key={banner.id}
-            href={banner.linkUrl}
-            target="_blank"
-            rel="noreferrer"
-            className={`absolute inset-0 transition-opacity duration-400 ${
-              idx === current ? 'opacity-100 z-10' : 'opacity-0 z-0'
-            }`}
-          >
-            <img
-              src={banner.imageUrl}
-              alt={`Banner ${banner.id}`}
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </a>
-        ))}
-      </div>
+      <a
+        href={banners[current].linkUrl}
+        target="_blank"
+        rel="noreferrer"
+        onClick={handleClick}
+        className="relative block aspect-[3/1] w-full bg-zinc-900"
+      >
+        <img
+          key={banners[current].id}
+          src={banners[current].imageUrl}
+          alt={`Banner ${banners[current].id}`}
+          className="w-full h-full object-cover animate-[fadeIn_0.3s_ease-in-out]"
+          referrerPolicy="no-referrer"
+        />
+      </a>
 
       <button
         onClick={prev}

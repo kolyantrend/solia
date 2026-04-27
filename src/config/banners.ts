@@ -14,7 +14,7 @@ export const PROMO_BANNERS: BannerConfig[] = [
   {
     id: 101,
     imageUrl: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/SoliaX.jpg',
-    linkUrl: 'https://x.com/SoliaLive',
+    linkUrl: 'https://solia.live/',
   },
   {
     id: 102,
@@ -24,27 +24,10 @@ export const PROMO_BANNERS: BannerConfig[] = [
   {
     id: 103,
     imageUrl: 'https://pub-961550f0079e4ff5a4210868b6523d47.r2.dev/SloiaX%20Car.png',
-    linkUrl: 'https://x.com/SoliaLive',
+    linkUrl: 'https://t.me/SoliaApp',
   },
 ];
 
-export const STATS_BANNERS: BannerConfig[] = [
-  {
-    id: 201,
-    imageUrl: 'https://pbs.twimg.com/profile_banners/1536816010375974913/1768971674/1500x500',
-    linkUrl: 'https://x.com/solanamobile',
-  },
-  {
-    id: 202,
-    imageUrl: 'https://pbs.twimg.com/profile_banners/1948544290323382273/1769483306/1080x360',
-    linkUrl: 'https://x.com/Identity_Prism',
-  },
-  {
-    id: 203,
-    imageUrl: 'https://pbs.twimg.com/profile_banners/1446275363202502844/1769623165/1080x360',
-    linkUrl: 'https://x.com/RadiantsDAO',
-  },
-];
 
 export const BANNERS: BannerConfig[] = [
   {
@@ -69,12 +52,22 @@ export const BANNERS: BannerConfig[] = [
   },
   {
     id: 5,
-    imageUrl: 'https://pbs.twimg.com/profile_banners/1484893291401433095/1723491149/1080x360',
-    linkUrl: 'https://x.com/AlignNexus',
+    imageUrl: 'https://pbs.twimg.com/profile_banners/1151639614047653888/1638887165/1080x360',
+    linkUrl: 'https://x.com/solanalabs',
   },
   {
     id: 6,
     imageUrl: 'https://pbs.twimg.com/profile_banners/1446275363202502844/1769623165/1080x360',
     linkUrl: 'https://x.com/RadiantsDAO',
+  },
+  {
+    id: 7,
+    imageUrl: 'https://pbs.twimg.com/profile_banners/1261335549215989760/1773844633/1500x500',
+    linkUrl: 'https://polymarket.com/?r=kolyantrend',
+  },
+  {
+    id: 8,
+    imageUrl: 'https://pbs.twimg.com/profile_banners/2349577974/1737473085/1500x500',
+    linkUrl: 'https://x.com/incubator',
   },
 ];

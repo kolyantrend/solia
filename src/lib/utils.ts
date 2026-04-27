@@ -3,10 +3,16 @@
  * display_name → Twitter username → short wallet address
  */
 export function getProfileDisplayName(profile: { display_name?: string | null; twitter?: string | null; wallet?: string } | null | undefined, wallet?: string): string {
-  if (profile?.display_name) return profile.display_name;
+  const MAX_LEN = 14;
+  if (profile?.display_name) {
+    const name = profile.display_name;
+    return name.length > MAX_LEN ? name.slice(0, MAX_LEN) + '…' : name;
+  }
   if (profile?.twitter) {
     const username = extractTwitterUsername(profile.twitter);
-    if (username) return username;
+    if (username) {
+      return username.length > MAX_LEN ? username.slice(0, MAX_LEN) + '…' : username;
+    }
   }
   const addr = profile?.wallet || wallet || '';
   if (addr.length <= 10) return addr;
@@ -196,7 +202,7 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       // Add semi-transparent watermark (larger, horizontal, more visible)
       const fontSize = Math.max(canvas.width, canvas.height) * 0.12;
       ctx.font = `900 ${fontSize}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
@@ -207,7 +213,7 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       ctx.save();
       const cornerFontSize = fontSize * 0.5;
       ctx.font = `900 ${cornerFontSize}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
       const padding = cornerFontSize * 0.3;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
@@ -218,7 +224,7 @@ export async function addWatermark(blob: Blob): Promise<Blob> {
       ctx.restore();
       
       // Add diagonal pattern
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
       ctx.lineWidth = 2;
       for (let i = -canvas.height; i < canvas.width + canvas.height; i += 80) {
         ctx.beginPath();

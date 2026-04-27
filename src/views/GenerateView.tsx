@@ -2,9 +2,9 @@ import React, { FC, useState, useEffect } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { Loader2, Sparkles, Image as ImageIcon, CheckCircle2, Settings2, Upload, X, HelpCircle, ClipboardPaste } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
 import { useI18n } from '../i18n';
 import * as db from '../lib/database';
+import type { AiConfig } from '../lib/database';
 import { transferSkrSplit, TREASURY_WALLET, MwaTimeoutError, buildPhantomBrowseUrl } from '../lib/solana';
 import { PublicKey } from '@solana/web3.js';
 import { getGenerationCostSkr } from '../lib/price';
@@ -45,6 +45,10 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
   const [grantWallet, setGrantWallet] = useState('');
   const [grantCount, setGrantCount] = useState(1);
   const [grantMsg, setGrantMsg] = useState('');
+
+  // AI model config (admin can switch)
+  const [aiConfig, setAiConfigState] = useState<AiConfig | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genElapsed, setGenElapsed] = useState(0);
   const [showGenHint, setShowGenHint] = useState(false);
@@ -90,6 +94,11 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     }, 1000);
     return () => clearInterval(interval);
   }, [isGenerating]);
+
+  // Load AI config from DB
+  useEffect(() => {
+    db.getAiConfig().then(setAiConfigState);
+  }, []);
 
   // Sync paid state when wallet changes
   useEffect(() => {
@@ -152,16 +161,8 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     return () => clearInterval(interval);
   }, []);
 
-  const runSecondaryGeneration = async (): Promise<string> => {
-    // Rotate between available API tokens for load balancing
-    const tokens = [
-      process.env.AI_SECONDARY_TOKEN,
-      process.env.AI_SECONDARY_TOKEN_2,
-      process.env.AI_SECONDARY_TOKEN_3,
-    ].filter(Boolean) as string[];
-    const token = tokens[Math.floor(Math.random() * tokens.length)];
+  const runReplicateGeneration = async (model: string): Promise<string> => {
     const proxyBase = import.meta.env.DEV ? '/api/ai-proxy' : 'https://solia.live/api/ai-proxy';
-    const model = process.env.AI_SECONDARY_MODEL || '';
 
     const imageInputs: string[] = [];
     if (imageFile1) imageInputs.push(`data:${imageFile1.mimeType};base64,${imageFile1.data}`);
@@ -170,7 +171,6 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     const res = await fetch(`${proxyBase}/v1/models/${model}/predictions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         'Prefer': 'wait',
       },
@@ -181,6 +181,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
           aspect_ratio: aspectRatio || '16:9',
           image_input: imageInputs,
           output_format: 'jpg',
+          thinking: false,
         },
       }),
     });
@@ -198,12 +199,8 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     return imgUrl;
   };
 
-  const runPrimaryGeneration = async (): Promise<string> => {
-    // Rotate between available API keys for load balancing
-    const keys = [process.env.AI_PRIMARY_KEY, process.env.AI_PRIMARY_KEY_2].filter(Boolean) as string[];
-    const apiKey = keys[Math.floor(Math.random() * keys.length)];
-    const ai = new GoogleGenAI({ apiKey });
-    const model = process.env.AI_PRIMARY_MODEL || '';
+  const runGeminiGeneration = async (model: string): Promise<string> => {
+    const proxyBase = import.meta.env.DEV ? '/api/gemini-proxy' : 'https://solia.live/api/gemini-proxy';
 
     // Retry up to 3 times on 503 / UNAVAILABLE
     let lastErr: any = null;
@@ -218,37 +215,49 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
         if (imageFile1) parts.push({ inlineData: { data: imageFile1.data, mimeType: imageFile1.mimeType } });
         if (imageFile2) parts.push({ inlineData: { data: imageFile2.data, mimeType: imageFile2.mimeType } });
 
-        const response = await ai.models.generateContent({
-          model,
-          contents: { parts },
-          config: {
-            imageConfig: {
-              aspectRatio: aspectRatio as any,
-              imageSize: resolution as any,
+        const res = await fetch(`${proxyBase}/${encodeURIComponent(model)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: {
+              responseModalities: ['IMAGE', 'TEXT'],
+              imageGenerationConfig: { aspectRatio, imageSize: resolution },
             },
-          },
+            thinkingConfig: { thinkingLevel: 'minimal' },
+          }),
         });
 
-        let imageUrl = '';
-        const candidate = response.candidates?.[0];
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          const errMsg = data?.error?.message || `Gemini error ${res.status}`;
+          const isRetryable = res.status >= 500 || (data?.error?.status || '').match(/UNAVAILABLE|INTERNAL/);
+          const err: any = new Error(errMsg);
+          if (!isRetryable) err.permanent = true;
+          throw err;
+        }
+
+        const candidate = data.candidates?.[0];
         const finishReason = candidate?.finishReason || '';
 
         for (const part of candidate?.content?.parts || []) {
           if (part.inlineData) {
-            imageUrl = `data:image/png;base64,${part.inlineData.data}`;
-            break;
+            return `data:image/png;base64,${part.inlineData.data}`;
           }
         }
 
-        if (!imageUrl) {
-          if (finishReason === 'SAFETY' || finishReason === 'BLOCKED') {
-            throw new Error('Content blocked by safety filter — try a different photo or prompt');
-          }
-          throw new Error(t('gen.errImage'));
+        if (finishReason === 'SAFETY' || finishReason === 'BLOCKED') {
+          const err: any = new Error('Content blocked by safety filter — try a different photo or prompt');
+          err.permanent = true;
+          throw err;
         }
-        return imageUrl;
+        const noImgErr: any = new Error(t('gen.errImage'));
+        noImgErr.permanent = true;
+        throw noImgErr;
       } catch (err: any) {
         lastErr = err;
+        if (err?.permanent) break;
         const msg = (err?.message || '') + (typeof err === 'object' ? JSON.stringify(err) : '');
         if (msg.includes('503') || msg.includes('500') || msg.includes('UNAVAILABLE') || msg.includes('INTERNAL') || msg.includes('overloaded') || msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')) {
           continue;
@@ -264,18 +273,22 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
     setIsGenerating(true);
     setError(null);
 
-    const hasSecondary = !!process.env.AI_SECONDARY_TOKEN;
+    // Get model config from DB (or defaults from env)
+    const cfg = aiConfig || await db.getAiConfig();
     let imageUrl: string;
 
-    if (hasSecondary) {
+    const runProvider = (provider: 'gemini' | 'replicate', model: string) =>
+      provider === 'gemini' ? runGeminiGeneration(model) : runReplicateGeneration(model);
+
+    try {
+      imageUrl = await runProvider(cfg.primary_provider, cfg.primary_model);
+    } catch (e) {
+      console.warn('Primary provider failed, falling back to secondary:', e);
       try {
-        imageUrl = await runSecondaryGeneration();
-      } catch (e) {
-        console.warn('Secondary provider failed, falling back to primary:', e);
-        imageUrl = await runPrimaryGeneration();
+        imageUrl = await runProvider(cfg.secondary_provider, cfg.secondary_model);
+      } catch {
+        throw e;
       }
-    } else {
-      imageUrl = await runPrimaryGeneration();
     }
 
     setResult(imageUrl);
@@ -506,7 +519,7 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
   );
 
   return (
-    <div className="flex flex-col gap-6 p-4 pb-24 max-w-md mx-auto w-full">
+    <div className="flex flex-col gap-6 p-4 pb-24 max-w-md lg:max-w-2xl mx-auto w-full">
       <BannerCarousel banners={PROMO_BANNERS} />
 
       <div className="text-center space-y-1">
@@ -726,6 +739,57 @@ export const GenerateView: FC<{ onGenerate: (post: any) => void }> = ({ onGenera
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Admin: AI Model Switcher */}
+      {isAdmin && aiConfig && (
+        <div className="bg-zinc-900/50 p-4 rounded-2xl border border-indigo-800/50 space-y-3">
+          <h3 className="text-sm font-bold text-indigo-400">Admin: AI Models</h3>
+          <div className="space-y-2">
+            <label className="text-xs text-zinc-400">Primary</label>
+            <select
+              value={`${aiConfig.primary_provider}:${aiConfig.primary_model}`}
+              onChange={(e) => {
+                const [provider, model] = e.target.value.split(':') as [AiConfig['primary_provider'], string];
+                setAiConfigState({ ...aiConfig, primary_provider: provider, primary_model: model });
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            >
+              <option value="gemini:gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image</option>
+              <option value="replicate:google/nano-banana-2">Nano Banana 2 (Replicate)</option>
+              <option value="replicate:google/nano-banana-pro">Nano Banana Pro (Replicate)</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs text-zinc-400">Secondary (fallback)</label>
+            <select
+              value={`${aiConfig.secondary_provider}:${aiConfig.secondary_model}`}
+              onChange={(e) => {
+                const [provider, model] = e.target.value.split(':') as [AiConfig['secondary_provider'], string];
+                setAiConfigState({ ...aiConfig, secondary_provider: provider, secondary_model: model });
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            >
+              <option value="gemini:gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image</option>
+              <option value="replicate:google/nano-banana-2">Nano Banana 2 (Replicate)</option>
+              <option value="replicate:google/nano-banana-pro">Nano Banana Pro (Replicate)</option>
+            </select>
+          </div>
+          <button
+            onClick={async () => {
+              setSavingConfig(true);
+              const ok = await db.setAiConfig(aiConfig);
+              setSavingConfig(false);
+              if (ok) setError(null);
+              else setError('Failed to save model config');
+            }}
+            disabled={savingConfig}
+            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-colors disabled:opacity-50"
+          >
+            {savingConfig ? 'Saving...' : 'Save Models'}
+          </button>
+          <p className="text-[10px] text-zinc-500 text-center">Changes apply to all users instantly</p>
         </div>
       )}
 
