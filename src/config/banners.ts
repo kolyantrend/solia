@@ -42,7 +42,7 @@ export const BANNERS: BannerConfig[] = [
   },
   {
     id: 3,
-    imageUrl: 'https://pbs.twimg.com/profile_banners/951329744804392960/1765755849/1500x500',
+    imageUrl: 'https://pbs.twimg.com/profile_banners/951329744804392960/1778240988/1500x500',
     linkUrl: 'https://x.com/solana',
   },
   {
@@ -57,8 +57,8 @@ export const BANNERS: BannerConfig[] = [
   },
   {
     id: 6,
-    imageUrl: 'https://pbs.twimg.com/profile_banners/1446275363202502844/1769623165/1080x360',
-    linkUrl: 'https://x.com/RadiantsDAO',
+    imageUrl: 'https://pbs.twimg.com/profile_banners/877807935493033984/1765141552/1500x500',
+    linkUrl: 'https://www.binance.com/join?ref=M1TGZERL',
   },
   {
     id: 7,

@@ -60,6 +60,8 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const walletAddr = publicKey?.toBase58() || '';
   const profileAddr = viewAddress || walletAddr;
   const isOwnProfile = !viewAddress || viewAddress === walletAddr;
+  const TREASURY = 'GqQ41MPh9b1HEt9V5FWnKZfPjdhjgnaPjPLCRcLsuprA';
+  const isTreasury = walletAddr === TREASURY;
 
   const [avatar, setAvatar] = useState<string | null>(null);
   const [twitter, setTwitter] = useState('');
@@ -95,6 +97,8 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
 
   // Verification
   const [verified, setVerified] = useState(false);
+  const [verifiedOrg, setVerifiedOrg] = useState(false);
+  const [profilePostCount, setProfilePostCount] = useState(0);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState<string | null>(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -125,6 +129,9 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   const [tempTwitter, setTempTwitter] = useState('');
   const [tempTelegram, setTempTelegram] = useState('');
   const [tempYoutube, setTempYoutube] = useState('');
+  const [tempDiscord, setTempDiscord] = useState('');
+  const [discord, setDiscord] = useState('');
+  const [socialErrors, setSocialErrors] = useState<Record<string, string>>({});
 
   // Load profile from Supabase
   useEffect(() => {
@@ -142,7 +149,9 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
         setTwitter(profile.twitter);
         setTelegram(profile.telegram);
         setYoutube(profile.youtube);
-        setVerified(!!profile.verified);
+        setDiscord(profile.discord || '');
+        setVerified(!!profile.verified || profileAddr === TREASURY);
+        setVerifiedOrg(!!profile.verified_org || profileAddr === TREASURY);
         setDisplayName(profile.display_name || null);
 
         // Fetch Twitter display name if not stored yet
@@ -154,6 +163,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
           }
         }
       }
+      setProfilePostCount(posts.length);
       setWorks(posts.map((p) => ({
         id: p.id,
         imageUrl: p.image_url,
@@ -224,7 +234,17 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
       setRefTotalCreators(totalCreators);
       // Batch-fetch profiles for avatars and display names
       if (items.length > 0) {
-        db.getProfilesBatch(items.map(r => r.wallet)).then(setRefProfiles);
+        const wallets = items.map(r => r.wallet);
+        Promise.all([
+          db.getProfilesBatch(wallets),
+          db.getPostCountsBatch(wallets),
+        ]).then(([profiles, counts]) => {
+          const profilesWithCounts = new Map(profiles);
+          for (const [w, p] of profilesWithCounts) {
+            profilesWithCounts.set(w, { ...p, post_count: counts.get(w) ?? 0 });
+          }
+          setRefProfiles(profilesWithCounts);
+        });
       } else {
         setRefProfiles(new Map());
       }
@@ -265,7 +285,12 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
     const list = type === 'followers' ? followers : following;
     if (list.length === 0) return;
     const profiles = await db.getProfilesBatch(list);
-    setFollowListProfiles(profiles);
+    const counts = await db.getPostCountsBatch(list);
+    const profilesWithCounts = new Map(profiles);
+    for (const [w, p] of profilesWithCounts) {
+      profilesWithCounts.set(w, { ...p, post_count: counts.get(w) ?? 0 });
+    }
+    setFollowListProfiles(profilesWithCounts);
     // Load follow statuses for current user
     if (walletAddr) {
       const myFollowing = await db.getFollowing(walletAddr);
@@ -404,17 +429,42 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
   };
 
 
+  const validateSocial = (field: string, value: string): string => {
+    if (!value) return '';
+    const v = value.trim().toLowerCase();
+    if (field === 'twitter' && v && !v.includes('x.com') && !v.includes('twitter.com') && !v.startsWith('@') && !/^[a-z0-9_]{1,15}$/.test(v))
+      return 'Enter X username or x.com link';
+    if (field === 'telegram' && v && !v.includes('t.me') && !v.includes('telegram') && !v.startsWith('@') && !/^[a-z0-9_]{5,32}$/.test(v))
+      return 'Enter Telegram username or t.me link';
+    if (field === 'youtube' && v && !v.includes('youtube.com') && !v.includes('youtu.be'))
+      return 'Enter a youtube.com link';
+    if (field === 'discord' && v && !v.includes('discord.gg') && !v.includes('discord.com/invite'))
+      return 'Enter a discord.gg invite link';
+    return '';
+  };
+
   const openEditModal = () => {
     setTempTwitter(twitter);
     setTempTelegram(telegram);
     setTempYoutube(youtube);
+    setTempDiscord(discord);
+    setSocialErrors({});
     setShowEditModal(true);
   };
 
   const handleSaveModal = async () => {
+    const errors: Record<string, string> = {
+      twitter: validateSocial('twitter', tempTwitter),
+      telegram: validateSocial('telegram', tempTelegram),
+      youtube: validateSocial('youtube', tempYoutube),
+      discord: validateSocial('discord', tempDiscord),
+    };
+    if (Object.values(errors).some(Boolean)) { setSocialErrors(errors); return; }
+    setSocialErrors({});
     setTwitter(tempTwitter);
     setTelegram(tempTelegram);
     setYoutube(tempYoutube);
+    setDiscord(tempDiscord);
 
     // Auto-fetch display name from Twitter if changed and not already set
     let newDisplayName = displayName;
@@ -435,6 +485,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
       twitter: tempTwitter,
       telegram: tempTelegram,
       youtube: tempYoutube,
+      discord: tempDiscord,
       ...(newDisplayName && !displayName ? { display_name: newDisplayName } : {}),
       ...(twitterChanged ? { verified: false } : {}),
     });
@@ -503,7 +554,16 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
           {displayName && (
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <span className="text-base font-bold text-zinc-100">{displayName}</span>
-              {verified && <BadgeCheck size={18} className="text-blue-400 shrink-0" />}
+              {(() => {
+                const _gold = verifiedOrg;
+                const _purple = profilePostCount >= 20 && !_gold;
+                const _blue = verified && !_gold && !_purple;
+                return _gold ? <BadgeCheck size={20} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                  : _purple ? <BadgeCheck size={20} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={20} className="fill-blue-500 text-zinc-950 shrink-0" />
+                  
+                  : null;
+              })()}
             </div>
           )}
           <p className="text-sm text-zinc-400 font-mono inline-flex items-center gap-1.5 justify-center">
@@ -518,6 +578,39 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
               </button>
             )}
           </p>
+          {/* Treasury admin: manage badges */}
+          {isTreasury && !isOwnProfile && (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <button
+                onClick={async () => {
+                  const ok = await db.setVerificationBadge(walletAddr, profileAddr, 'none');
+                  if (ok) { setVerified(false); setVerifiedOrg(false); }
+                }}
+                className="px-3 py-1 rounded-full text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
+              >
+                Remove badge
+              </button>
+              <button
+                onClick={async () => {
+                  const ok = await db.setVerificationBadge(walletAddr, profileAddr, 'blue');
+                  if (ok) { setVerified(true); setVerifiedOrg(false); }
+                }}
+                className="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors flex items-center gap-1"
+              >
+                <BadgeCheck size={12} /> Blue
+              </button>
+              <button
+                onClick={async () => {
+                  const ok = await db.setVerificationBadge(walletAddr, profileAddr, 'gold');
+                  if (ok) { setVerified(true); setVerifiedOrg(true); }
+                }}
+                className="px-3 py-1 rounded-full text-xs bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-colors flex items-center gap-1"
+              >
+                <BadgeCheck size={12} /> Gold
+              </button>
+            </div>
+          )}
+
           {/* Verify button (own profile, has twitter, not yet verified) */}
           {isOwnProfile && twitter && !verified && (
             <button
@@ -939,7 +1032,17 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                       <span className="text-xs text-zinc-300">
                         {getProfileDisplayName(refProfiles.get(r.wallet), r.wallet)}
                       </span>
-                      {refProfiles.get(r.wallet)?.verified && <BadgeCheck size={10} className="text-blue-400 shrink-0" />}
+                      {(() => {
+                        const _rp = refProfiles.get(r.wallet);
+                        const _gold = _rp?.verified_org || r.wallet === TREASURY;
+                        const _purple = (_rp?.post_count ?? 0) >= 20 && !_gold;
+                        const _blue = _rp?.verified && !_gold && !_purple;
+                        return _gold ? <BadgeCheck size={16} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                          : _purple ? <BadgeCheck size={16} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={16} className="fill-blue-500 text-zinc-950 shrink-0" />
+                          
+                          : null;
+                      })()}
                     </button>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
@@ -1167,7 +1270,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
 
             {verifyResult === 'success' && (
               <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <BadgeCheck size={18} className="text-emerald-400" />
+                <BadgeCheck size={20} className="text-emerald-400" />
                 <span className="text-sm text-emerald-300 font-medium">Profile verified!</span>
               </div>
             )}
@@ -1266,7 +1369,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                     type="text"
                     placeholder="@username or https://x.com/username"
                     value={tempTwitter}
-                    onChange={(e) => setTempTwitter(e.target.value)}
+                    onChange={(e) => { setTempTwitter(e.target.value); setSocialErrors(p => ({ ...p, twitter: '' })); }}
                     className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-100 placeholder:text-zinc-600"
                   />
                   <button
@@ -1277,6 +1380,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                     <ClipboardPaste size={16} />
                   </button>
                 </div>
+                {socialErrors.twitter && <p className="text-xs text-red-400 px-1 mt-1">{socialErrors.twitter}</p>}
                 <p className="text-[10px] text-zinc-500 mt-1 px-1">+ used as your profile avatar</p>
               </div>
               <div className="flex items-center gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
@@ -1285,7 +1389,7 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                   type="text"
                   placeholder={t('prof.tgLink')}
                   value={tempTelegram}
-                  onChange={(e) => setTempTelegram(e.target.value)}
+                  onChange={(e) => { setTempTelegram(e.target.value); setSocialErrors(p => ({ ...p, telegram: '' })); }}
                   className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-100 placeholder:text-zinc-600"
                 />
                 <button
@@ -1296,13 +1400,14 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                   <ClipboardPaste size={16} />
                 </button>
               </div>
+              {socialErrors.telegram && <p className="text-xs text-red-400 px-1">{socialErrors.telegram}</p>}
               <div className="flex items-center gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                 <Youtube className="text-zinc-400 shrink-0" size={20} />
                 <input
                   type="text"
                   placeholder={t('prof.ytLink')}
                   value={tempYoutube}
-                  onChange={(e) => setTempYoutube(e.target.value)}
+                  onChange={(e) => { setTempYoutube(e.target.value); setSocialErrors(p => ({ ...p, youtube: '' })); }}
                   className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-100 placeholder:text-zinc-600"
                 />
                 <button
@@ -1313,6 +1418,25 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                   <ClipboardPaste size={16} />
                 </button>
               </div>
+              {socialErrors.youtube && <p className="text-xs text-red-400 px-1">{socialErrors.youtube}</p>}
+              <div className="flex items-center gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-zinc-400 shrink-0"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.04.031.054A19.9 19.9 0 0 0 5.11 20.42a.077.077 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.032.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                <input
+                  type="text"
+                  placeholder="discord.gg/invite"
+                  value={tempDiscord}
+                  onChange={(e) => { setTempDiscord(e.target.value); setSocialErrors(p => ({ ...p, discord: '' })); }}
+                  className="bg-transparent border-none outline-none flex-1 text-sm text-zinc-100 placeholder:text-zinc-600"
+                />
+                <button
+                  onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setTempDiscord(t); } catch {} }}
+                  className="text-zinc-500 hover:text-indigo-400 transition-colors shrink-0 p-1"
+                  title="Paste"
+                >
+                  <ClipboardPaste size={16} />
+                </button>
+              </div>
+              {socialErrors.discord && <p className="text-xs text-red-400 px-1">{socialErrors.discord}</p>}
             </div>
 
             <div className="flex gap-2">
@@ -1377,7 +1501,19 @@ export const ProfileView: FC<{ viewAddress?: string; onViewProfile?: (address: s
                         )}
                       </button>
                       <button onClick={() => { setShowFollowList(null); onViewProfile?.(addr); }} className="flex-1 min-w-0 text-left">
-                        <div className="text-sm font-medium text-zinc-100 truncate">{name}</div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm font-medium text-zinc-100 truncate">{name}</span>
+                          {(() => {
+                            const _gold = prof?.verified_org || addr === TREASURY;
+                            const _purple = (prof?.post_count ?? 0) >= 20 && !_gold;
+                            const _blue = prof?.verified && !_gold && !_purple;
+                            return _gold ? <BadgeCheck size={15} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                              : _purple ? <BadgeCheck size={15} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={15} className="fill-blue-500 text-zinc-950 shrink-0" />
+                              
+                              : null;
+                          })()}
+                        </div>
                         <div className="text-xs text-zinc-500 truncate">{shortAddr(addr)}</div>
                       </button>
                       {walletAddr && !isMe && (

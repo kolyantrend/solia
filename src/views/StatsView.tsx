@@ -135,7 +135,16 @@ export const StatsView: FC<{ onViewProfile?: (address: string) => void }> = ({ o
                     <span className="text-xs font-semibold text-zinc-200 truncate">
                       {currentFollower.display_name || (currentFollower.twitter ? extractTwitterUsername(currentFollower.twitter) : currentFollower.wallet.slice(0, 4) + '...' + currentFollower.wallet.slice(-4))}
                     </span>
-                    {currentFollower.verified && <BadgeCheck size={12} className="text-blue-400 shrink-0" />}
+                    {(() => {
+                      const _gold = (currentFollower as any).verified_org || currentFollower.wallet === 'GqQ41MPh9b1HEt9V5FWnKZfPjdhjgnaPjPLCRcLsuprA';
+                      const _purple = ((currentFollower as any).post_count ?? 0) >= 20 && !_gold;
+                      const _blue = currentFollower.verified && !_gold && !_purple;
+                      return _gold ? <BadgeCheck size={16} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                        : _purple ? <BadgeCheck size={16} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={16} className="fill-blue-500 text-zinc-950 shrink-0" />
+                        
+                        : null;
+                    })()}
                   </div>
                   <span className="text-[10px] text-amber-400 font-medium">{currentFollower.count} followers</span>
                 </div>

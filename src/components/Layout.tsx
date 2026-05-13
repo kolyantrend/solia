@@ -347,7 +347,7 @@ export const Layout: FC<LayoutProps> = ({ children, activeTab, setActiveTab, onV
 // ── Desktop Right Panel ──────────────────────────────────────────────────────
 
 const DesktopRightPanel: FC<{ walletAddress: string | null; onSetTab: (tab: string) => void; onViewProfile?: (wallet: string) => void; onOpenLegal?: (page: 'terms' | 'privacy' | 'license') => void }> = ({ walletAddress, onSetTab, onViewProfile, onOpenLegal }) => {
-  const [creators, setCreators] = useState<{ wallet: string; generations: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]>([]);
+  const [creators, setCreators] = useState<{ wallet: string; generations: number; avatar_url: string | null; twitter: string; verified: boolean; verified_org: boolean; display_name: string | null }[]>([]);
   const [trendingPosts, setTrendingPosts] = useState<{ id: string; image_url: string; author: string }[]>([]);
   const [refCode, setRefCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -356,7 +356,7 @@ const DesktopRightPanel: FC<{ walletAddress: string | null; onSetTab: (tab: stri
 
   useEffect(() => {
     getLeaderboard(24).then((data) => {
-      setCreators(data.filter(c => c.wallet !== TREASURY_WALLET.toBase58()).slice(0, 5));
+      setCreators(data.filter(c => c.wallet !== TREASURY_WALLET.toBase58()).slice(0, 5).map(c => ({ ...c, verified_org: !!c.verified_org })));
     });
     getPosts({ sort: 'hot', limit: 3 }).then((posts) => {
       setTrendingPosts(posts.filter(p => p.image_url).slice(0, 3).map(p => ({ id: p.id, image_url: p.image_url!, author: p.author })));
@@ -420,7 +420,15 @@ const DesktopRightPanel: FC<{ walletAddress: string | null; onSetTab: (tab: stri
                     <p className="text-sm font-medium text-zinc-200 truncate">
                       {getProfileDisplayName({ display_name: c.display_name, twitter: c.twitter, wallet: c.wallet })}
                     </p>
-                    {c.verified && <BadgeCheck size={12} className="text-indigo-400 shrink-0" />}
+                    {(() => {
+                      const _gold = c.verified_org || c.wallet === TREASURY_WALLET.toBase58();
+                      const _purple = c.generations >= 20 && !_gold;
+                      const _blue = c.verified && !_gold && !_purple;
+                      return _gold ? <BadgeCheck size={13} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                        : _purple ? <BadgeCheck size={13} className="fill-violet-500 text-zinc-950 shrink-0" />
+                        : _blue ? <BadgeCheck size={13} className="fill-blue-500 text-zinc-950 shrink-0" />
+                        : null;
+                    })()}
                   </div>
                   <p className="text-xs text-zinc-500">{c.generations} gen</p>
                 </div>

@@ -14,7 +14,7 @@ import { Key, ArrowLeft } from 'lucide-react';
 import { I18nProvider, useI18n } from './i18n';
 import { ThemeProvider } from './theme';
 import { useUnifiedWallet } from './hooks/useUnifiedWallet';
-import { saveReferral, resolveRefCode, getReferrer } from './lib/database';
+import { saveReferral, resolveRefCode, getReferrer, getPostById, DbPost } from './lib/database';
 
 declare global {
   interface Window {
@@ -71,24 +71,41 @@ function AppContent() {
   return <AppInner />;
 }
 
+function parseInitialRoute(): { legalPage: 'terms' | 'privacy' | 'license' | null; profileWallet: string | null; postId: string | null } {
+  const path = window.location.pathname;
+  if (path === '/terms') return { legalPage: 'terms', profileWallet: null, postId: null };
+  if (path === '/privacy') return { legalPage: 'privacy', profileWallet: null, postId: null };
+  if (path === '/license') return { legalPage: 'license', profileWallet: null, postId: null };
+  const profileMatch = path.match(/^\/profile\/(.+)$/);
+  if (profileMatch) return { legalPage: null, profileWallet: profileMatch[1], postId: null };
+  const postMatch = path.match(/^\/post\/(.+)$/);
+  if (postMatch) return { legalPage: null, profileWallet: null, postId: postMatch[1] };
+  return { legalPage: null, profileWallet: null, postId: null };
+}
+
 function AppInner() {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('feed');
   const [posts, setPosts] = useState<Post[]>([]);
   const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [viewingProfile, setViewingProfile] = useState<string | null>(null);
+  const initial = useRef(parseInitialRoute());
+  const [viewingProfile, setViewingProfile] = useState<string | null>(initial.current.profileWallet);
+  const [viewingPost, setViewingPost] = useState<DbPost | null>(null);
   const [previousTab, setPreviousTab] = useState<string>('feed');
-  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | 'license' | null>(() => {
-    const path = window.location.pathname;
-    if (path === '/terms') return 'terms';
-    if (path === '/privacy') return 'privacy';
-    if (path === '/license') return 'license';
-    return null;
-  });
+  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | 'license' | null>(initial.current.legalPage);
   const isDirectLegalAccess = useRef(
     ['terms', 'privacy', 'license'].includes(window.location.pathname.slice(1)) &&
     document.referrer === ''
   );
+
+  // Load post by ID on direct URL access
+  useEffect(() => {
+    const postId = initial.current.postId;
+    if (!postId) return;
+    getPostById(postId).then((post) => {
+      if (post) setViewingPost(post);
+    });
+  }, []);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -120,18 +137,30 @@ function AppInner() {
 
   const handleViewProfile = (address: string) => {
     setPreviousTab(activeTab);
+    setViewingPost(null);
     setViewingProfile(address);
+    window.history.pushState(null, '', `/profile/${address}`);
+  };
+
+  const handleViewPost = (post: DbPost) => {
+    setViewingPost(post);
+    setViewingProfile(null);
+    window.history.pushState(null, '', `/post/${post.id}`);
   };
 
   const handleBackFromProfile = () => {
     setViewingProfile(null);
+    setViewingPost(null);
     setActiveTab(previousTab);
+    window.history.pushState(null, '', '/');
   };
 
   const handleSetActiveTab = (tab: string) => {
     setViewingProfile(null);
+    setViewingPost(null);
     setLegalPage(null);
     setActiveTab(tab);
+    window.history.pushState(null, '', '/');
   };
 
   const handleOpenLegal = (page: 'terms' | 'privacy' | 'license') => {
@@ -145,14 +174,23 @@ function AppInner() {
     window.history.pushState(null, '', '/');
   };
 
-  // Handle browser back/forward for legal pages
+  // Handle browser back/forward
   useEffect(() => {
     const onPopState = () => {
       const path = window.location.pathname;
-      if (path === '/terms') setLegalPage('terms');
-      else if (path === '/privacy') setLegalPage('privacy');
-      else if (path === '/license') setLegalPage('license');
-      else setLegalPage(null);
+      if (path === '/terms') { setLegalPage('terms'); setViewingProfile(null); setViewingPost(null); }
+      else if (path === '/privacy') { setLegalPage('privacy'); setViewingProfile(null); setViewingPost(null); }
+      else if (path === '/license') { setLegalPage('license'); setViewingProfile(null); setViewingPost(null); }
+      else {
+        const profileMatch = path.match(/^\/profile\/(.+)$/);
+        const postMatch = path.match(/^\/post\/(.+)$/);
+        if (profileMatch) { setViewingProfile(profileMatch[1]); setViewingPost(null); setLegalPage(null); }
+        else if (postMatch) {
+          setViewingProfile(null); setLegalPage(null);
+          getPostById(postMatch[1]).then((post) => { if (post) setViewingPost(post); });
+        }
+        else { setLegalPage(null); setViewingProfile(null); setViewingPost(null); }
+      }
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -212,6 +250,23 @@ function AppInner() {
             : legalPage === 'privacy'
             ? <PrivacyView onBack={handleBackFromLegal} />
             : <LicenseView onBack={handleBackFromLegal} />
+        ) : viewingPost ? (
+          <>
+            <div className="px-4 pt-3">
+              <button
+                onClick={handleBackFromProfile}
+                className="flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                <ArrowLeft size={16} />
+                {t('nav.feed')}
+              </button>
+            </div>
+            <FeedView
+              posts={[{ id: viewingPost.id, imageUrl: viewingPost.image_url, prompt: viewingPost.prompt, author: viewingPost.author, likes: viewingPost.likes_count, category: viewingPost.category, aspectRatio: viewingPost.aspect_ratio, createdAt: viewingPost.created_at }]}
+              onViewProfile={handleViewProfile}
+              singlePostMode
+            />
+          </>
         ) : viewingProfile ? (
           <>
             <div className="px-4 pt-3">
@@ -231,7 +286,7 @@ function AppInner() {
           </>
         ) : (
           <>
-            {activeTab === 'feed' && <FeedView posts={posts} onViewProfile={handleViewProfile} />}
+            {activeTab === 'feed' && <FeedView posts={posts} onViewProfile={handleViewProfile} onViewPost={handleViewPost} />}
             {/* GenerateView stays mounted (hidden) so generation survives tab switches */}
             <div style={{ display: activeTab === 'generate' ? undefined : 'none' }}>
               <GenerateView onGenerate={handleGenerate} />

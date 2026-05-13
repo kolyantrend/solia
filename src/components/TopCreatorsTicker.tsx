@@ -1,7 +1,7 @@
 import { FC, useState, useEffect, useRef } from 'react';
 import { BadgeCheck } from 'lucide-react';
 import { getTopGenerators12h } from '../lib/database';
-import { TREASURY_WALLET } from '../lib/solana';
+const TREASURY = 'GqQ41MPh9b1HEt9V5FWnKZfPjdhjgnaPjPLCRcLsuprA';
 import { SolanaAvatar } from './SolanaAvatar';
 import { getTwitterAvatarUrl, getProfileDisplayName } from '../lib/utils';
 
@@ -11,7 +11,9 @@ interface TopCreator {
   avatar_url: string | null;
   twitter: string;
   verified: boolean;
+  verified_org: boolean;
   display_name: string | null;
+  post_count?: number;
 }
 
 function shortAddr(addr: string) {
@@ -26,6 +28,7 @@ const PLACEHOLDERS: TopCreator[] = Array.from({ length: 6 }, (_, i) => ({
   avatar_url: null,
   twitter: '',
   verified: false,
+  verified_org: false,
   display_name: null,
 }));
 
@@ -33,7 +36,11 @@ export const TopCreatorsTicker: FC<{ onViewProfile?: (address: string) => void }
   const [creators, setCreators] = useState<TopCreator[]>(() => {
     try {
       const cached = sessionStorage.getItem('solia_top_creators');
-      return cached ? JSON.parse(cached) : [];
+      if (!cached) return [];
+      const parsed = JSON.parse(cached) as TopCreator[];
+      // Invalidate cache if missing verified_org field
+      if (parsed.length > 0 && parsed[0].verified_org === undefined) return [];
+      return parsed;
     } catch { return []; }
   });
 
@@ -107,7 +114,16 @@ export const TopCreatorsTicker: FC<{ onViewProfile?: (address: string) => void }
               <div className="flex flex-col items-start">
                 <div className="flex items-center gap-0.5">
                   <span className="text-[11px] font-semibold text-zinc-200 leading-tight">{getProfileDisplayName(creator)}</span>
-                  {creator.verified && <BadgeCheck size={10} className="text-blue-400 shrink-0" />}
+                  {(() => {
+                    const _gold = creator.verified_org || creator.wallet === TREASURY;
+                    const _purple = (creator.post_count ?? creator.count ?? 0) >= 20 && !_gold;
+                    const _blue = creator.verified && !_gold && !_purple;
+                    return _gold ? <BadgeCheck size={16} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                      : _purple ? <BadgeCheck size={16} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={16} className="fill-blue-500 text-zinc-950 shrink-0" />
+                      
+                      : null;
+                  })()}
                 </div>
                 <span className="text-[9px] text-indigo-400 font-medium leading-tight">
                   {isReal ? `${creator.count} gen` : '—'}

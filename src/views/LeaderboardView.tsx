@@ -1,5 +1,5 @@
 import { FC, useEffect, useState } from 'react';
-import { Trophy, Medal, Award, Heart, Users, Link2, Loader2, BadgeCheck, Download } from 'lucide-react';
+import { Trophy, Medal, Award, Heart, Users, Link2, Loader2, BadgeCheck, Download, ShoppingCart, ChevronDown } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { useUnifiedWallet } from '../hooks/useUnifiedWallet';
 import { TREASURY_WALLET } from '../lib/solana';
@@ -8,6 +8,8 @@ import { SolanaAvatar } from '../components/SolanaAvatar';
 import { getTwitterAvatarUrl, extractTwitterUsername, getProfileDisplayName } from '../lib/utils';
 import { BannerCarousel } from '../components/BannerCarousel';
 import { PROMO_BANNERS } from '../config/banners';
+
+const TREASURY = 'GqQ41MPh9b1HEt9V5FWnKZfPjdhjgnaPjPLCRcLsuprA';
 
 interface LeaderboardUser {
   rank: number;
@@ -19,10 +21,11 @@ interface LeaderboardUser {
   telegram: string;
   youtube: string;
   verified: boolean;
+  verified_org: boolean;
   display_name: string | null;
 }
 
-type LeaderboardTab = 'generations' | 'likes' | 'creators' | 'followers';
+type LeaderboardTab = 'generations' | 'likes' | 'creators' | 'followers' | 'purchased';
 type TimePeriod = '24h' | '7d' | '30d' | 'all';
 
 const PERIOD_HOURS: Record<TimePeriod, number | undefined> = {
@@ -42,12 +45,15 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
   const { publicKey } = useUnifiedWallet();
   const isAdmin = publicKey?.toBase58() === TREASURY_WALLET.toBase58();
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('generations');
+  const [showSubMenu, setShowSubMenu] = useState(false);
   const [period, setPeriod] = useState<TimePeriod>('all');
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [topReferrers, setTopReferrers] = useState<{ wallet: string; creator_count: number }[]>([]);
   const [topFollowers, setTopFollowers] = useState<{ wallet: string; follower_count: number }[]>([]);
-  const [followerProfiles, setFollowerProfiles] = useState<Map<string, { twitter: string; display_name: string | null; avatar_url: string | null; verified: boolean }>>(new Map());
-  const [referrerProfiles, setReferrerProfiles] = useState<Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null; avatar_url: string | null }>>(new Map());
+  const [topPurchasers, setTopPurchasers] = useState<{ wallet: string; purchase_count: number }[]>([]);
+  const [purchaserProfiles, setPurchaserProfiles] = useState<Map<string, { twitter: string; display_name: string | null; avatar_url: string | null; verified: boolean; verified_org: boolean; post_count?: number }>>(new Map());
+  const [followerProfiles, setFollowerProfiles] = useState<Map<string, { twitter: string; display_name: string | null; avatar_url: string | null; verified: boolean; verified_org: boolean; post_count?: number }>>(new Map());
+  const [referrerProfiles, setReferrerProfiles] = useState<Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null; avatar_url: string | null; post_count?: number }>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,6 +74,7 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
         telegram: u.telegram,
         youtube: u.youtube,
         verified: u.verified,
+        verified_org: !!u.verified_org || u.wallet === TREASURY,
         display_name: u.display_name,
       })));
       setTopReferrers(refs);
@@ -76,9 +83,10 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
       if (refs.length > 0) {
         try {
           const profiles = await db.getProfilesBatch(refs.map(r => r.wallet));
-          const map = new Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null; avatar_url: string | null }>();
+          const counts = await db.getPostCountsBatch(refs.map(r => r.wallet));
+          const map = new Map<string, { twitter: string; telegram: string; youtube: string; display_name: string | null; avatar_url: string | null; post_count?: number }>();
           profiles.forEach((p, wallet) => {
-            map.set(wallet, { twitter: p.twitter || '', telegram: p.telegram || '', youtube: p.youtube || '', display_name: p.display_name || null, avatar_url: p.avatar_url || null });
+            map.set(wallet, { twitter: p.twitter || '', telegram: p.telegram || '', youtube: p.youtube || '', display_name: p.display_name || null, avatar_url: p.avatar_url || null, post_count: counts.get(wallet) ?? 0 });
           });
           setReferrerProfiles(map);
         } catch {}
@@ -89,13 +97,29 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
       if (followers.length > 0) {
         try {
           const fProfiles = await db.getProfilesBatch(followers.map(f => f.wallet));
-          const fMap = new Map<string, { twitter: string; display_name: string | null; avatar_url: string | null; verified: boolean }>();
+          const fCounts = await db.getPostCountsBatch(followers.map(f => f.wallet));
+          const fMap = new Map<string, { twitter: string; display_name: string | null; avatar_url: string | null; verified: boolean; verified_org: boolean; post_count?: number }>();
           fProfiles.forEach((p, wallet) => {
-            fMap.set(wallet, { twitter: p.twitter || '', display_name: p.display_name || null, avatar_url: p.avatar_url || null, verified: !!p.verified });
+            fMap.set(wallet, { twitter: p.twitter || '', display_name: p.display_name || null, avatar_url: p.avatar_url || null, verified: !!p.verified, verified_org: !!p.verified_org || wallet === TREASURY, post_count: fCounts.get(wallet) ?? 0 });
           });
           setFollowerProfiles(fMap);
         } catch {}
       }
+
+      // Load top purchasers
+      try {
+        const purchasers = await db.getTopPurchasers(50);
+        setTopPurchasers(purchasers);
+        if (purchasers.length > 0) {
+          const pProfiles = await db.getProfilesBatch(purchasers.map(p => p.wallet));
+          const pCounts = await db.getPostCountsBatch(purchasers.map(p => p.wallet));
+          const pMap = new Map<string, { twitter: string; display_name: string | null; avatar_url: string | null; verified: boolean; verified_org: boolean; post_count?: number }>();
+          pProfiles.forEach((p, wallet) => {
+            pMap.set(wallet, { twitter: p.twitter || '', display_name: p.display_name || null, avatar_url: p.avatar_url || null, verified: !!p.verified, verified_org: !!p.verified_org || wallet === TREASURY, post_count: pCounts.get(wallet) ?? 0 });
+          });
+          setPurchaserProfiles(pMap);
+        }
+      } catch {}
 
       setLoading(false);
     });
@@ -111,39 +135,47 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
     })
     .map((user, idx) => ({ ...user, rank: idx + 1 }));
 
-  const handleExport = () => {
-    let csv = 'Rank,Wallet,Twitter,Display Name,Generations,Likes\n';
-    if (activeTab === 'followers') {
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const downloadCsv = (tab: LeaderboardTab) => {
+    let csv = '';
+    if (tab === 'followers') {
       csv = 'Rank,Wallet,Twitter,Display Name,Followers\n';
       topFollowers.forEach((item, idx) => {
         const prof = followerProfiles.get(item.wallet);
-        const tw = prof?.twitter ? extractTwitterUsername(prof.twitter) || prof.twitter : '';
-        const name = prof?.display_name || '';
-        csv += `${idx + 1},${item.wallet},${tw},${name},${item.follower_count}\n`;
+        csv += `${idx + 1},${item.wallet},${prof?.twitter ? extractTwitterUsername(prof.twitter) || prof.twitter : ''},${prof?.display_name || ''},${item.follower_count}\n`;
       });
-    } else if (activeTab === 'creators') {
+    } else if (tab === 'creators') {
       csv = 'Rank,Wallet,Twitter,Display Name,Creators Invited\n';
       filteredReferrers.forEach((ref, idx) => {
         const prof = referrerProfiles.get(ref.wallet);
-        const tw = prof?.twitter ? extractTwitterUsername(prof.twitter) || prof.twitter : '';
-        const name = prof?.display_name || '';
-        csv += `${idx + 1},${ref.wallet},${tw},${name},${ref.creator_count}\n`;
+        csv += `${idx + 1},${ref.wallet},${prof?.twitter ? extractTwitterUsername(prof.twitter) || prof.twitter : ''},${prof?.display_name || ''},${ref.creator_count}\n`;
+      });
+    } else if (tab === 'purchased') {
+      csv = 'Rank,Wallet,Twitter,Display Name,Purchases\n';
+      topPurchasers.forEach((item, idx) => {
+        const prof = purchaserProfiles.get(item.wallet);
+        csv += `${idx + 1},${item.wallet},${prof?.twitter ? extractTwitterUsername(prof.twitter) || prof.twitter : ''},${prof?.display_name || ''},${item.purchase_count}\n`;
+      });
+    } else if (tab === 'likes') {
+      csv = 'Rank,Wallet,Twitter,Display Name,Likes\n';
+      [...leaderboard].sort((a, b) => b.totalLikes - a.totalLikes).forEach((user, idx) => {
+        csv += `${idx + 1},${user.address},${user.twitter ? extractTwitterUsername(user.twitter) || user.twitter : ''},${user.display_name || ''},${user.totalLikes}\n`;
       });
     } else {
+      csv = 'Rank,Wallet,Twitter,Display Name,Generations,Likes\n';
       sortedLeaderboard.forEach((user) => {
-        const tw = user.twitter ? extractTwitterUsername(user.twitter) || user.twitter : '';
-        const name = user.display_name || '';
-        csv += `${user.rank},${user.address},${tw},${name},${user.generations},${user.totalLikes}\n`;
+        csv += `${user.rank},${user.address},${user.twitter ? extractTwitterUsername(user.twitter) || user.twitter : ''},${user.display_name || ''},${user.generations},${user.totalLikes}\n`;
       });
     }
-
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `solia_top_${activeTab}_${period}.csv`;
+    a.download = `solia_top_${tab}_${period}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    setShowExportMenu(false);
   };
 
   return (
@@ -158,51 +190,64 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
       </div>
 
       {/* Tab Switcher */}
-      <div className="flex gap-1.5 sm:gap-2 bg-zinc-900/50 p-1 rounded-2xl border border-zinc-800/50">
-        <button
-          onClick={() => setActiveTab('generations')}
-          className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
-            activeTab === 'generations'
-              ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Users size={14} className="shrink-0" />
-          Creators
-        </button>
-        <button
-          onClick={() => setActiveTab('likes')}
-          className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
-            activeTab === 'likes'
-              ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/20'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Heart size={14} className="shrink-0" />
-          {t('lb.tabLikes')}
-        </button>
-        <button
-          onClick={() => setActiveTab('followers')}
-          className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
-            activeTab === 'followers'
-              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Users size={14} className="shrink-0" />
-          {t('lb.tabFollowers')}
-        </button>
-        <button
-          onClick={() => setActiveTab('creators')}
-          className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
-            activeTab === 'creators'
-              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Link2 size={14} className="shrink-0" />
-          Referrals
-        </button>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex gap-1.5 bg-zinc-900/50 p-1 rounded-2xl border border-zinc-800/50">
+          {([
+            { key: 'generations', label: 'Creators', icon: <Users size={14} />, color: 'bg-indigo-500 shadow-indigo-500/20' },
+            { key: 'purchased', label: 'Purchased', icon: <ShoppingCart size={14} />, color: 'bg-amber-500 shadow-amber-500/20' },
+            { key: 'creators', label: 'Referrals', icon: <Link2 size={14} />, color: 'bg-emerald-500 shadow-emerald-500/20' },
+          ] as const).map(({ key, label, icon, color }) => (
+            <button
+              key={key}
+              onClick={() => { setActiveTab(key); setShowSubMenu(false); }}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === key ? `${color} text-white shadow-lg` : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {icon}{label}
+            </button>
+          ))}
+          {/* Social tab — relative для дропдауна */}
+          <div className="relative flex-1">
+            <button
+              onClick={() => setShowSubMenu(v => !v)}
+              className={`w-full flex items-center justify-center gap-1 py-2 rounded-xl text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === 'likes' || activeTab === 'followers'
+                  ? 'bg-pink-500 shadow-lg shadow-pink-500/20 text-white'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Heart size={14} />
+              Social
+              <ChevronDown size={12} className={`transition-transform ${showSubMenu ? 'rotate-180' : ''}`} />
+            </button>
+            {/* Dropdown прямо под кнопкой */}
+            {showSubMenu && (
+              <div className="absolute right-0 top-full mt-1.5 z-30 flex flex-col bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl min-w-[140px]">
+                <button
+                  onClick={() => { setActiveTab('followers'); setShowSubMenu(false); }}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+                    activeTab === 'followers' ? 'text-purple-400 bg-purple-500/10' : 'text-zinc-300 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Users size={14} className={activeTab === 'followers' ? 'text-purple-400' : 'text-zinc-500'} />
+                  Followers
+                </button>
+                <div className="h-px bg-zinc-800 mx-3" />
+                <button
+                  onClick={() => { setActiveTab('likes'); setShowSubMenu(false); }}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+                    activeTab === 'likes' ? 'text-pink-400 bg-pink-500/10' : 'text-zinc-300 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Heart size={14} className={activeTab === 'likes' ? 'text-pink-400' : 'text-zinc-500'} />
+                  By Likes
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        {showSubMenu && <div className="fixed inset-0 z-20" onClick={() => setShowSubMenu(false)} />}
       </div>
 
       {/* Time Period Filter + Export */}
@@ -223,14 +268,39 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
           ))}
         </div>
         {isAdmin && (
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 text-[11px] sm:text-xs font-medium transition-colors"
-            title="Export CSV"
-          >
-            <Download size={12} />
-            CSV
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(v => !v)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 text-[11px] sm:text-xs font-medium transition-colors"
+            >
+              <Download size={12} />
+              CSV
+              <ChevronDown size={11} className={`transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1.5 z-30 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl min-w-[160px]">
+                {([
+                  { key: 'generations', label: 'Creators' },
+                  { key: 'purchased', label: 'Purchased' },
+                  { key: 'creators', label: 'Referrals' },
+                  { key: 'followers', label: 'Followers' },
+                  { key: 'likes', label: 'By Likes' },
+                ] as const).map(({ key, label }, i, arr) => (
+                  <div key={key}>
+                    <button
+                      onClick={() => downloadCsv(key)}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+                    >
+                      <Download size={13} className="text-zinc-500" />
+                      {label}
+                    </button>
+                    {i < arr.length - 1 && <div className="h-px bg-zinc-800 mx-3" />}
+                  </div>
+                ))}
+              </div>
+            )}
+            {showExportMenu && <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />}
+          </div>
         )}
       </div>
 
@@ -271,7 +341,16 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
                         <SolanaAvatar size={24} />
                       )}
                       <span className="font-mono text-sm text-zinc-200">{getProfileDisplayName(prof ? { ...prof, wallet: item.wallet } : null, item.wallet)}</span>
-                      {prof?.verified && <BadgeCheck size={14} className="text-blue-400 shrink-0" />}
+                      {(() => {
+                        const _gold = prof?.verified_org || item.wallet === TREASURY;
+                        const _purple = ((prof as any)?.post_count ?? 0) >= 20 && !_gold;
+                        const _blue = prof?.verified && !_gold && !_purple;
+                        return _gold ? <BadgeCheck size={16} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                          : _purple ? <BadgeCheck size={16} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={16} className="fill-blue-500 text-zinc-950 shrink-0" />
+                          
+                          : null;
+                      })()}
                       {prof?.twitter && (
                         <a href={prof.twitter.startsWith('http') ? prof.twitter : `https://x.com/${prof.twitter}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-blue-400 transition-colors">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
@@ -354,6 +433,61 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
             })}
           </div>
         </div>
+      ) : activeTab === 'purchased' ? (
+        <div className="bg-zinc-900/50 rounded-3xl border border-zinc-800/50 backdrop-blur-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800/50 bg-zinc-900/80">
+            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Buyer</span>
+            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Purchases</span>
+          </div>
+          <div className="divide-y divide-zinc-800/50">
+            {loading ? (
+              <div className="flex justify-center py-8"><Loader2 className="animate-spin text-zinc-500" size={24} /></div>
+            ) : topPurchasers.length === 0 ? (
+              <div className="text-center py-8 text-zinc-500 text-sm">No purchases yet</div>
+            ) : topPurchasers.map((item, idx) => {
+              const prof = purchaserProfiles.get(item.wallet);
+              const xAvatar = prof?.twitter ? getTwitterAvatarUrl(prof.twitter) : null;
+              const src = xAvatar || prof?.avatar_url;
+              return (
+                <div key={item.wallet} className="flex items-center justify-between p-4 hover:bg-zinc-800/30 transition-colors cursor-pointer" onClick={() => onViewProfile?.(item.wallet)}>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
+                      idx === 0 ? 'bg-amber-500 text-amber-950 shadow-lg shadow-amber-500/20' :
+                      idx === 1 ? 'bg-zinc-300 text-zinc-800 shadow-lg shadow-zinc-300/20' :
+                      idx === 2 ? 'bg-amber-700 text-amber-100 shadow-lg shadow-amber-700/20' :
+                      'bg-zinc-800 text-zinc-400'
+                    }`}>
+                      {idx === 0 ? <Trophy size={16} /> : idx === 1 ? <Medal size={16} /> : idx === 2 ? <Award size={16} /> : idx + 1}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {src ? <img src={src} alt="" className="w-6 h-6 rounded-full object-cover border border-zinc-700" referrerPolicy="no-referrer" /> : <SolanaAvatar size={24} />}
+                      <span className="font-mono text-sm text-zinc-200">{getProfileDisplayName(prof ? { ...prof, wallet: item.wallet } : null, item.wallet)}</span>
+                      {(() => {
+                        const _gold = prof?.verified_org || item.wallet === TREASURY;
+                        const _purple = ((prof as any)?.post_count ?? 0) >= 20 && !_gold;
+                        const _blue = prof?.verified && !_gold && !_purple;
+                        return _gold ? <BadgeCheck size={16} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                          : _purple ? <BadgeCheck size={16} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={16} className="fill-blue-500 text-zinc-950 shrink-0" />
+                          
+                          : null;
+                      })()}
+                      {prof?.twitter && (
+                        <a href={prof.twitter.startsWith('http') ? prof.twitter : `https://x.com/${prof.twitter}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-blue-400 transition-colors">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0">
+                    <span className="font-bold text-amber-400">{item.purchase_count}</span>
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">bought</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : (
         /* Generations / Likes leaderboard */
         <div className="bg-zinc-900/50 rounded-3xl border border-zinc-800/50 backdrop-blur-sm overflow-hidden">
@@ -394,7 +528,16 @@ export const LeaderboardView: FC<{ onViewProfile?: (address: string) => void }> 
                       );
                     })()}
                     <span className="font-mono text-sm text-zinc-200">{getProfileDisplayName({ display_name: user.display_name, twitter: user.twitter, wallet: user.address })}</span>
-                    {user.verified && <BadgeCheck size={14} className="text-blue-400 shrink-0" />}
+                    {(() => {
+                      const _gold = user.verified_org || user.address === TREASURY;
+                      const _purple = user.generations >= 20 && !_gold;
+                      const _blue = user.verified && !_gold && !_purple;
+                      return _gold ? <BadgeCheck size={16} className="fill-yellow-400 text-zinc-950 shrink-0" />
+                        : _purple ? <BadgeCheck size={16} className="fill-violet-500 text-zinc-950 shrink-0" />
+                          : _blue ? <BadgeCheck size={16} className="fill-blue-500 text-zinc-950 shrink-0" />
+                        
+                        : null;
+                    })()}
                     {user.twitter && (
                       <a href={user.twitter.startsWith('http') ? user.twitter : `https://x.com/${user.twitter}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-blue-400 transition-colors">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>

@@ -22,10 +22,13 @@ export interface Profile {
   twitter: string;
   telegram: string;
   youtube: string;
+  discord: string;
   ref_code: string | null;
   verified: boolean;
+  verified_org: boolean;
   verification_code: string | null;
   display_name: string | null;
+  post_count?: number;
   created_at: string;
 }
 
@@ -71,6 +74,24 @@ export async function getProfilesBatch(wallets: string[]): Promise<Map<string, P
   return map;
 }
 
+export async function getPostCountsBatch(wallets: string[]): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (!isSupabaseConfigured || wallets.length === 0) return result;
+  try {
+    const unique = [...new Set(wallets)];
+    const { data } = await supabase
+      .from('posts')
+      .select('author')
+      .in('author', unique);
+    if (data) {
+      for (const row of data) {
+        result.set(row.author, (result.get(row.author) || 0) + 1);
+      }
+    }
+  } catch {}
+  return result;
+}
+
 export async function upsertProfile(profile: Partial<Profile> & { wallet: string }) {
   if (!isSupabaseConfigured) return;
   try {
@@ -102,6 +123,27 @@ export async function getOrCreateVerificationCode(wallet: string): Promise<strin
       .eq('wallet', wallet);
     return code;
   } catch { return null; }
+}
+
+export async function setVerificationBadge(
+  adminWallet: string,
+  targetWallet: string,
+  type: 'none' | 'blue' | 'gold'
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const TREASURY = 'GqQ41MPh9b1HEt9V5FWnKZfPjdhjgnaPjPLCRcLsuprA';
+  if (adminWallet !== TREASURY) return false;
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        verified: type === 'blue' || type === 'gold',
+        verified_org: type === 'gold',
+      })
+      .eq('wallet', targetWallet);
+    invalidateProfileCache(targetWallet);
+    return !error;
+  } catch { return false; }
 }
 
 // Mark profile as verified and store display name
@@ -302,6 +344,18 @@ export async function getPosts(options: {
       .sort((a, b) => b.score - a.score);
     return scored.slice(offset, offset + limit).map((s) => s.post);
   } catch (e) { console.warn('getPosts:', e); return []; }
+}
+
+export async function getPostById(id: string): Promise<DbPost | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const { data } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    return data || null;
+  } catch (e) { console.warn('getPostById:', e); return null; }
 }
 
 export async function getUserPosts(wallet: string): Promise<DbPost[]> {
@@ -596,6 +650,7 @@ export interface DbComment {
   post_id: string;
   text: string;
   created_at: string;
+  parent_id?: string | null;
 }
 
 export async function getComments(postId: string): Promise<DbComment[]> {
@@ -638,17 +693,56 @@ export async function getCommentCountsBatch(postIds: string[]): Promise<Map<stri
   return result;
 }
 
-export async function addComment(wallet: string, postId: string, text: string): Promise<DbComment | null> {
+export async function addComment(wallet: string, postId: string, text: string, parentId?: string | null): Promise<DbComment | null> {
   if (!isSupabaseConfigured) return null;
   try {
     const { data, error } = await supabase
       .from('comments')
-      .insert({ user_wallet: wallet, post_id: postId, text })
+      .insert({ user_wallet: wallet, post_id: postId, text, ...(parentId ? { parent_id: parentId } : {}) })
       .select()
       .single();
     if (error) console.error('addComment error:', error);
     return data;
   } catch { return null; }
+}
+
+export async function toggleCommentLike(commentId: string, wallet: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { data: existing } = await supabase
+      .from('comment_likes')
+      .select('id')
+      .eq('comment_id', commentId)
+      .eq('wallet', wallet)
+      .maybeSingle();
+    if (existing) {
+      await supabase.from('comment_likes').delete().eq('comment_id', commentId).eq('wallet', wallet);
+      return false;
+    } else {
+      await supabase.from('comment_likes').insert({ comment_id: commentId, wallet });
+      return true;
+    }
+  } catch { return false; }
+}
+
+export async function getCommentLikesBatch(commentIds: string[], myWallet?: string): Promise<Map<string, { count: number; liked: boolean }>> {
+  const result = new Map<string, { count: number; liked: boolean }>();
+  if (!isSupabaseConfigured || commentIds.length === 0) return result;
+  try {
+    const { data } = await supabase
+      .from('comment_likes')
+      .select('comment_id, wallet')
+      .in('comment_id', commentIds);
+    if (data) {
+      for (const row of data) {
+        const cur = result.get(row.comment_id) || { count: 0, liked: false };
+        cur.count++;
+        if (myWallet && row.wallet === myWallet) cur.liked = true;
+        result.set(row.comment_id, cur);
+      }
+    }
+  } catch {}
+  return result;
 }
 
 // ========================
@@ -688,6 +782,22 @@ export async function purchasePost(wallet: string, postId: string, txSignature: 
     if (error) { console.warn('purchasePost error:', error); return false; }
     return true;
   } catch (e) { console.warn('purchasePost:', e); return false; }
+}
+
+export async function getTopPurchasers(limit = 50): Promise<{ wallet: string; purchase_count: number }[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data } = await supabase
+      .from('purchases')
+      .select('buyer_wallet');
+    if (!data) return [];
+    const counts = new Map<string, number>();
+    for (const row of data) counts.set(row.buyer_wallet, (counts.get(row.buyer_wallet) || 0) + 1);
+    return Array.from(counts.entries())
+      .map(([wallet, purchase_count]) => ({ wallet, purchase_count }))
+      .sort((a, b) => b.purchase_count - a.purchase_count)
+      .slice(0, limit);
+  } catch { return []; }
 }
 
 export async function getPurchasedPosts(wallet: string): Promise<DbPost[]> {
@@ -793,13 +903,13 @@ export async function getTopByFollowers(limit = 50): Promise<{ wallet: string; f
 // LEADERBOARD
 // ========================
 
-export async function getLeaderboard(periodHours?: number): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; telegram: string; youtube: string; verified: boolean; display_name: string | null }[]> {
+export async function getLeaderboard(periodHours?: number): Promise<{ wallet: string; generations: number; total_likes: number; avatar_url: string | null; twitter: string; telegram: string; youtube: string; verified: boolean; verified_org: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
     // Fetch all verified profiles
     const { data: verifiedProfiles } = await supabase
       .from('profiles')
-      .select('wallet, avatar_url, twitter, telegram, youtube, verified, display_name')
+      .select('wallet, avatar_url, twitter, telegram, youtube, verified, verified_org, display_name')
       .eq('verified', true);
 
     // Fetch all posts (paginated)
@@ -831,7 +941,7 @@ export async function getLeaderboard(periodHours?: number): Promise<{ wallet: st
     const verifiedWallets = new Set((verifiedProfiles || []).map(p => p.wallet));
     const nonVerifiedEntries = Array.from(statsMap.entries())
       .filter(([wallet]) => !verifiedWallets.has(wallet))
-      .map(([wallet, stats]) => ({ wallet, ...stats, avatar_url: null, twitter: '', telegram: '', youtube: '', verified: false, display_name: null }));
+      .map(([wallet, stats]) => ({ wallet, ...stats, avatar_url: null, twitter: '', telegram: '', youtube: '', verified: false, verified_org: false, display_name: null }));
 
     // Fetch profiles for non-verified authors
     const nonVerifiedWallets = nonVerifiedEntries.map(e => e.wallet);
@@ -865,6 +975,7 @@ export async function getLeaderboard(periodHours?: number): Promise<{ wallet: st
       telegram: p.telegram || '',
       youtube: p.youtube || '',
       verified: true,
+      verified_org: !!p.verified_org,
       display_name: p.display_name || null,
     }));
 
@@ -878,13 +989,13 @@ export async function getLeaderboard(periodHours?: number): Promise<{ wallet: st
 // TOP GENERATORS (12h)
 // ========================
 
-export async function getTopGenerators12h(): Promise<{ wallet: string; count: number; avatar_url: string | null; twitter: string; verified: boolean; display_name: string | null }[]> {
+export async function getTopGenerators12h(): Promise<{ wallet: string; count: number; avatar_url: string | null; twitter: string; verified: boolean; verified_org: boolean; display_name: string | null }[]> {
   if (!isSupabaseConfigured) return [];
   try {
     // Fetch all verified profiles
     const { data: verifiedProfiles } = await supabase
       .from('profiles')
-      .select('wallet, avatar_url, twitter, verified, display_name')
+      .select('wallet, avatar_url, twitter, verified, verified_org, display_name')
       .eq('verified', true);
 
     if (!verifiedProfiles || verifiedProfiles.length === 0) return [];
@@ -909,6 +1020,7 @@ export async function getTopGenerators12h(): Promise<{ wallet: string; count: nu
         avatar_url: p.avatar_url || null,
         twitter: p.twitter || '',
         verified: true,
+        verified_org: !!p.verified_org,
         display_name: p.display_name || null,
       }))
       .filter(p => p.count > 0)
@@ -1433,14 +1545,18 @@ export async function getViewCountsBatch(postIds: string[]): Promise<Map<string,
   const result = new Map<string, number>();
   if (!isSupabaseConfigured || postIds.length === 0) return result;
   try {
-    const { data } = await supabase
-      .from('post_views')
-      .select('post_id')
-      .in('post_id', postIds);
-    if (data) {
-      for (const row of data) {
-        result.set(row.post_id, (result.get(row.post_id) || 0) + 1);
-      }
+    const unique = [...new Set(postIds)];
+    const counts = await Promise.all(
+      unique.map(async (id) => {
+        const { count } = await supabase
+          .from('post_views')
+          .select('*', { count: 'exact', head: true })
+          .eq('post_id', id);
+        return [id, count ?? 0] as [string, number];
+      }),
+    );
+    for (const [id, count] of counts) {
+      result.set(id, count);
     }
   } catch {}
   return result;
